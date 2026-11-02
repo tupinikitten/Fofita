@@ -6,7 +6,6 @@ void desenhar_carousel(void);
 void mover_carousel_esquerda(void);
 void mover_carousel_direita(void);
 void fechar_carousel(void);
-
-const char* obter_caminho_jogo_atual(void); 
+const char *obter_caminho_jogo_atual(void);
 
 #endif
