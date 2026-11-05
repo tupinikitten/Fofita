@@ -1,0 +1,46 @@
+
+# ROMs e imagens de jogos
+*.nes
+*.gb
+*.gbc
+*.gba
+*.sfc
+*.smc
+*.n64
+*.z64
+*.v64
+*.nds
+*.3ds
+*.iso
+*.cso
+*.wbfs
+*.wud
+*.wux
+*.rom
+
+# BIOS e firmware
+# Adicione regras específicas conforme necessário
+
+# Dependências
+node_modules/
+
+# Builds
+dist/
+build/
+out/
+
+# Arquivos temporários
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Configurações locais e segredos
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/
+.idea/

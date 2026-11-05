@@ -6,7 +6,9 @@
 typedef enum {
     CAPA_STRETCH = 0, /* preenche a etiqueta, podendo deformar */
     CAPA_CONTAIN = 1, /* mostra a imagem inteira, sem deformar */
-    CAPA_CROP = 2     /* preenche a etiqueta, recortando o excesso */
+    CAPA_CROP = 2,    /* preenche a etiqueta, recortando o excesso */
+    CAPA_AUTO = 3     /* escolhe sozinho: recorta se a proporcao for parecida com a da
+                         etiqueta; senao mostra a arte inteira sobre um fundo suave */
 } ModoEncaixeCapa;
 
 typedef struct {

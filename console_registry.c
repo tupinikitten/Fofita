@@ -29,9 +29,11 @@ EXT_LIST(ext_arcade, ".zip", ".7z");
  */
 static const ConsoleConfig consoles[] = {
     {"atari2600", "Atari 2600", ext_atari2600, sizeof(ext_atari2600)/sizeof(ext_atari2600[0]), "roms/atari2600", "assets/atari2600", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0},
-    /* Coordenadas medidas no arquivo templates/nes_template.png (687x764).
-       A etiqueta do NES ocupa aproximadamente x=273..595, y=0..520. */
-    {"nes", "Nintendo Entertainment System", ext_nes, sizeof(ext_nes)/sizeof(ext_nes[0]), "roms/nes", "assets/nes", "templates/nes_template.png", 687,764, 273,0,323,520, CAPA_CROP, 16},
+    /* Coordenadas medidas no arquivo templates/nes_template.png (730x835).
+       molde_w/molde_h DEVEM ser o tamanho real do PNG; off_x/off_y/label_w/label_h
+       sao medidos nesse mesmo PNG. A etiqueta do NES ocupa x=298..619, y=31..550.
+       Os cantos inferiores do rebaixo tem raio ~6 px (medido no template). */
+    {"nes", "Nintendo Entertainment System", ext_nes, sizeof(ext_nes)/sizeof(ext_nes[0]), "roms/nes", "labels/nes", "assets/nes/body/cartridge_base.png", 730,835, 298,31,322,520, CAPA_AUTO, 6},
     {"snes", "Super Nintendo", ext_snes, sizeof(ext_snes)/sizeof(ext_snes[0]), "roms/snes", "assets/snes", "templates/snes_template.png", 400,400, 40,100,320,220, CAPA_CONTAIN, 0},
     {"gb", "Game Boy", ext_gb, sizeof(ext_gb)/sizeof(ext_gb[0]), "roms/gb", "assets/gb", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0},
     {"gbc", "Game Boy Color", ext_gbc, sizeof(ext_gbc)/sizeof(ext_gbc[0]), "roms/gbc", "assets/gbc", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0},
