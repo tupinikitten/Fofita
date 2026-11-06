@@ -13,6 +13,9 @@ extern int formato_de_cor;
 
 bool init_video_audio(void);
 void fechar_video_audio(void);
+/* Chamadas ao voltar ao menu: o proximo jogo pode ter outro tamanho/formato de video. */
+void descartar_textura_jogo(void);
+void limpar_audio(void);
 
 void retro_video_refresh_cb(const void *data, unsigned width, unsigned height, size_t pitch);
 void retro_audio_sample_cb(int16_t left, int16_t right);

@@ -12,11 +12,16 @@ void (*core_set_audio_batch)(retro_audio_sample_batch_t);
 void (*core_set_input_poll)(retro_input_poll_t);
 void (*core_set_input_state)(retro_input_state_t);
 void (*core_init)(void);
-void (*core_load_game)(const struct retro_game_info*);
+bool (*core_load_game)(const struct retro_game_info*);
+void (*core_unload_game)(void);
 void (*core_run_ptr)(void);
 void (*core_deinit)(void);
 
 HMODULE core_dll = NULL;
+
+/* Os dados da ROM precisam continuar validos enquanto o jogo estiver carregado. */
+static void *rom_data = NULL;
+static int jogo_carregado = 0;
 
 extern void retro_input_poll_cb(void);
 extern int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id);
@@ -46,9 +51,19 @@ bool init_core(const char* core_path) {
     core_set_input_poll = (void (*)(retro_input_poll_t))GetProcAddress(core_dll, "retro_set_input_poll");
     core_set_input_state = (void (*)(retro_input_state_t))GetProcAddress(core_dll, "retro_set_input_state");
     core_init = (void (*)(void))GetProcAddress(core_dll, "retro_init");
-    core_load_game = (void (*)(const struct retro_game_info*))GetProcAddress(core_dll, "retro_load_game");
+    core_load_game = (bool (*)(const struct retro_game_info*))GetProcAddress(core_dll, "retro_load_game");
+    core_unload_game = (void (*)(void))GetProcAddress(core_dll, "retro_unload_game");
     core_run_ptr = (void (*)(void))GetProcAddress(core_dll, "retro_run");
     core_deinit = (void (*)(void))GetProcAddress(core_dll, "retro_deinit");
+
+    if (!core_set_environment || !core_set_video || !core_set_audio || !core_set_audio_batch ||
+        !core_set_input_poll || !core_set_input_state || !core_init || !core_load_game ||
+        !core_run_ptr || !core_deinit) {
+        printf("Erro: %s nao parece ser um nucleo libretro valido.\n", core_path);
+        FreeLibrary(core_dll);
+        core_dll = NULL;
+        return false;
+    }
 
     core_set_environment(retro_environment_cb);
     core_set_video(retro_video_refresh_cb);
@@ -63,29 +78,72 @@ bool init_core(const char* core_path) {
 
 bool load_game(const char* game_path) {
     struct retro_game_info info = {0};
-    info.path = game_path; 
-    
+    info.path = game_path;
+
     FILE *file = fopen(info.path, "rb");
-    if (file) {
-        fseek(file, 0, SEEK_END);
-        info.size = ftell(file);
-        rewind(file);
-        info.data = malloc(info.size);
-        fread((void*)info.data, 1, info.size, file);
-        fclose(file);
-        
-        core_load_game(&info);
-        return true;
+    if (!file) {
+        printf("Nao foi possivel encontrar a ROM!\n");
+        return false;
     }
-    printf("Nao foi possivel encontrar a ROM!\n");
-    return false;
+
+    fseek(file, 0, SEEK_END);
+    long tamanho = ftell(file);
+    rewind(file);
+
+    if (tamanho <= 0) {
+        fclose(file);
+        printf("A ROM esta vazia ou ilegivel.\n");
+        return false;
+    }
+
+    rom_data = malloc((size_t)tamanho);
+    if (!rom_data) {
+        fclose(file);
+        printf("Memoria insuficiente para carregar a ROM.\n");
+        return false;
+    }
+
+    size_t lidos = fread(rom_data, 1, (size_t)tamanho, file);
+    fclose(file);
+
+    if (lidos != (size_t)tamanho) {
+        free(rom_data);
+        rom_data = NULL;
+        printf("Falha ao ler a ROM.\n");
+        return false;
+    }
+
+    info.data = rom_data;
+    info.size = (size_t)tamanho;
+
+    if (!core_load_game(&info)) {
+        free(rom_data);
+        rom_data = NULL;
+        printf("O nucleo recusou a ROM.\n");
+        return false;
+    }
+
+    jogo_carregado = 1;
+    return true;
 }
 
 void run_core(void) {
     if (core_run_ptr) core_run_ptr();
 }
 
+/* Descarrega o jogo atual (se houver) e libera a memoria da ROM. */
+void unload_game(void) {
+    if (jogo_carregado && core_unload_game) core_unload_game();
+    jogo_carregado = 0;
+    free(rom_data);
+    rom_data = NULL;
+}
+
 void close_core(void) {
-    if (core_deinit) core_deinit();
+    unload_game();
+    if (core_deinit && core_dll) core_deinit();
     if (core_dll) FreeLibrary(core_dll);
+    core_dll = NULL;
+    core_run_ptr = NULL;
+    core_deinit = NULL;
 }

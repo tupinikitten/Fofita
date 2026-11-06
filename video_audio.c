@@ -10,7 +10,7 @@ int formato_de_cor = SDL_PIXELFORMAT_RGB555;
 
 bool init_video_audio(void) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    IMG_Init(IMG_INIT_PNG);
+    IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG);
 
     SDL_AudioSpec esp_audio = {0};
     esp_audio.freq = 44100;
@@ -35,6 +35,17 @@ void fechar_video_audio(void) {
     SDL_DestroyWindow(window);
     IMG_Quit();
     SDL_Quit();
+}
+
+void descartar_textura_jogo(void) {
+    if (textura_jogo) {
+        SDL_DestroyTexture(textura_jogo);
+        textura_jogo = NULL;
+    }
+}
+
+void limpar_audio(void) {
+    if (dispositivo_audio) SDL_ClearQueuedAudio(dispositivo_audio);
 }
 
 void retro_video_refresh_cb(const void *data, unsigned width, unsigned height, size_t pitch) {

@@ -28,7 +28,10 @@ typedef struct {
 static Jogo *jogos = NULL;
 static size_t total_jogos = 0;
 static size_t capacidade_jogos = 0;
-static size_t foco_atual = 0;
+static size_t foco_atual = 0;       /* posicao dentro de 'indices' (jogos visiveis) */
+static size_t *indices = NULL;        /* indices em 'jogos' dos jogos do console filtrado */
+static size_t total_visiveis = 0;
+static const ConsoleConfig *console_filtro = NULL;
 static ConsoleRuntime *runtime_consoles = NULL;
 static size_t total_consoles = 0;
 
@@ -200,11 +203,49 @@ void init_carousel(void) {
         escanear_pasta_console(&configs[i], configs[i].pasta_roms);
 
     printf("Total de jogos encontrados: %zu\n", total_jogos);
+    carousel_definir_console(NULL);
+}
+
+static void reconstruir_indices(void) {
+    free(indices);
+    indices = total_jogos > 0 ? (size_t *)malloc(total_jogos * sizeof(size_t)) : NULL;
+    total_visiveis = 0;
+    foco_atual = 0;
+
+    if (!indices) return;
+
+    for (size_t i = 0; i < total_jogos; ++i)
+        if (!console_filtro || jogos[i].sistema == console_filtro)
+            indices[total_visiveis++] = i;
+}
+
+void carousel_definir_console(const ConsoleConfig *console) {
+    console_filtro = console;
+    reconstruir_indices();
+}
+
+size_t carousel_total_visiveis(void) { return total_visiveis; }
+
+size_t carousel_posicao_atual(void) { return foco_atual; }
+
+int carousel_nome_jogo_atual(char *saida, size_t capacidade) {
+    if (!saida || capacidade == 0) return 0;
+    saida[0] = '\0';
+    if (total_visiveis == 0) return 0;
+
+    const char *nome = jogos[indices[foco_atual]].nome_arquivo;
+    const char *ext = strrchr(nome, '.');
+    size_t len = ext ? (size_t)(ext - nome) : strlen(nome);
+
+    if (len >= capacidade) len = capacidade - 1;
+    memcpy(saida, nome, len);
+    saida[len] = '\0';
+    return 1;
 }
 
 const char *obter_caminho_jogo_atual(void) {
-    return total_jogos > 0
-        ? jogos[foco_atual].caminho_completo_rom
+    return total_visiveis > 0
+        ? jogos[indices[foco_atual]].caminho_completo_rom
         : NULL;
 }
 
@@ -278,56 +319,53 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
     }
 }
 
-void desenhar_carousel(void) {
-    if (total_jogos == 0) return;
+void desenhar_carousel(SDL_Rect area) {
+    if (total_visiveis == 0 || area.w <= 0 || area.h <= 0) return;
 
-    int viewport_w = 800;
-    int viewport_h = 600;
+    /* Margem vertical para a flutuacao do cartucho em foco (+-10 px). */
+    const int margem_flutuacao = 14;
 
-    if (renderer)
-        SDL_GetRendererOutputSize(renderer, &viewport_w, &viewport_h);
+    int cart_box = area.h - 2 * margem_flutuacao;
+    if (cart_box > area.w) cart_box = area.w;
+    if (cart_box < 64) cart_box = 64;
 
-    if (viewport_w <= 0) viewport_w = 800;
-    if (viewport_h <= 0) viewport_h = 600;
+    /* Mesmas proporcoes de antes: lateral = 70% e afastamento = 75% do principal. */
+    const int side_box = cart_box * 7 / 10;
+    const int side_offset = cart_box * 3 / 4;
 
-    const int cart_box_w = 400;
-    const int cart_box_h = 400;
-    const int side_box_w = 280;
-    const int side_box_h = 280;
+    const int center_x = area.x + area.w / 2;
+    const int center_y = area.y + area.h / 2;
+    const int main_x = center_x - cart_box / 2;
+    const int main_y = center_y - cart_box / 2;
 
-    const int center_x = viewport_w / 2;
-    const int center_y = viewport_h / 2;
-    const int main_x = center_x - cart_box_w / 2;
-    const int main_y = center_y - cart_box_h / 2;
+    if (total_visiveis > 1) {
+        size_t esquerda = foco_atual == 0 ? total_visiveis - 1 : foco_atual - 1;
+        size_t direita = foco_atual + 1 == total_visiveis ? 0 : foco_atual + 1;
 
-    if (total_jogos > 1) {
-        size_t esquerda = foco_atual == 0 ? total_jogos - 1 : foco_atual - 1;
-        size_t direita = foco_atual + 1 == total_jogos ? 0 : foco_atual + 1;
+        desenhar_jogo(indices[esquerda],
+            (SDL_Rect){center_x - side_offset - side_box / 2,
+                       center_y - side_box / 2, side_box, side_box}, 100);
 
-        desenhar_jogo(esquerda,
-            (SDL_Rect){center_x - 300 - side_box_w / 2,
-                       center_y - side_box_h / 2, side_box_w, side_box_h}, 100);
-
-        desenhar_jogo(direita,
-            (SDL_Rect){center_x + 300 - side_box_w / 2,
-                       center_y - side_box_h / 2, side_box_w, side_box_h}, 100);
+        desenhar_jogo(indices[direita],
+            (SDL_Rect){center_x + side_offset - side_box / 2,
+                       center_y - side_box / 2, side_box, side_box}, 100);
     }
 
     float tempo = SDL_GetTicks() / 300.0f;
     int flutuacao_y = (int)(sin(tempo) * 10.0f);
 
-    desenhar_jogo(foco_atual,
-        (SDL_Rect){main_x, main_y + flutuacao_y, cart_box_w, cart_box_h}, 255);
+    desenhar_jogo(indices[foco_atual],
+        (SDL_Rect){main_x, main_y + flutuacao_y, cart_box, cart_box}, 255);
 }
 
 void mover_carousel_esquerda(void) {
-    if (total_jogos > 0)
-        foco_atual = foco_atual == 0 ? total_jogos - 1 : foco_atual - 1;
+    if (total_visiveis > 0)
+        foco_atual = foco_atual == 0 ? total_visiveis - 1 : foco_atual - 1;
 }
 
 void mover_carousel_direita(void) {
-    if (total_jogos > 0)
-        foco_atual = (foco_atual + 1) % total_jogos;
+    if (total_visiveis > 0)
+        foco_atual = (foco_atual + 1) % total_visiveis;
 }
 
 void fechar_carousel(void) {
@@ -343,8 +381,11 @@ void fechar_carousel(void) {
 
     free(runtime_consoles);
     free(jogos);
+    free(indices);
 
     runtime_consoles = NULL;
     jogos = NULL;
-    total_consoles = total_jogos = capacidade_jogos = foco_atual = 0;
+    indices = NULL;
+    console_filtro = NULL;
+    total_consoles = total_jogos = capacidade_jogos = foco_atual = total_visiveis = 0;
 }
