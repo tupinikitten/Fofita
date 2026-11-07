@@ -57,20 +57,27 @@ O Fofita agora abre num menu; o jogo so roda depois de escolher uma ROM.
 - `video_audio.c`: agora inicia `IMG_INIT_JPG` (o wallpaper e .jpg) e tem `descartar_textura_jogo()` / `limpar_audio()` para a volta ao menu.
 - Arquivos novos para entrar na compilacao: `ui_menu.c`, `ui_text.c`, `ui_theme.c`.
 
-### Assets (`assets/ui/`)
+### Interface (`ui/`)
 ```
 wallpapers/bk-01.jpg
 consoles/<console>_icon.png        icones coloridos dos consoles (servem para qualquer estilo)
-estilos/escuro/arrows/*.png        setas (icones pretos, para fundos claros)
-estilos/escuro/icons/*.png         trofeu, engrenagem, funil, coracao, pincel
+styles/dark/arrows/*.png        setas (icones pretos, para fundos claros)
+styles/dark/icons/*.png         trofeu, engrenagem, funil, coracao, pincel
 ```
-Um novo estilo (claro, colorido) e uma pasta nova em `assets/ui/estilos/` com os mesmos nomes de arquivo, mais uma entrada em `ui_theme.c`.
+Um novo estilo (claro, colorido) e uma pasta nova em `ui/styles/` com os mesmos nomes de arquivo, mais uma entrada em `ui_theme.c`.
 
 ### Validacao
 Neste ambiente nao ha SDL2 nem MinGW. Todos os arquivos passaram em `gcc -fsyntax-only -Wall -Wextra` contra cabecalhos simulados do SDL, e o menu real (ui_menu, ui_text, ui_carousel, console_registry) foi executado contra um SDL simulado em software, com capturas de tela conferidas (layout, carrossel, ocultar/restaurar console, persistencia do `.cfg`, acentos). **Nao testado:** compilacao com SDL2 real, audio/video do nucleo e o ciclo menu -> jogo -> menu no Windows.
 
 ## Pendente (organizado para depois)
-- Barra lateral recolhivel (seta ^ oculta): troféu = RetroAchievements, engrenagem = configuracoes, funil = filtros da biblioteca, coracao = favoritos, pincel = personalizacao visual. Os PNGs ja estao em `assets/ui/estilos/escuro/icons/`.
 - Personalizacao de wallpapers (inclusive animados) e de icones, com estilos pre-prontos (escuro para fundo claro, claro para fundo escuro, colorido). O ponto de entrada e `ui_theme.c`; falta a escolha do usuario e um seletor.
-- Tela de configuracoes para gerenciar consoles ocultos (hoje: H / Shift+H no cabecalho).
 - Acesso aos metadados do jogo pelo cartucho (antes era o Espaco sobre o jogo; Espaco agora volta ao menu).
+
+### Atualizacao da interface lateral (06/11/2026)
+- Recursos visuais da interface agora usam `ui/` na raiz: wallpapers, icones de consoles, setas e icones laterais.
+- Corrigidos os caminhos dos wallpapers, setas e icones dos consoles para refletir a estrutura atual.
+- Adicionada barra lateral recolhida/expandida (Tab), com navegacao por setas e confirmacao.
+- Configuracoes abre um painel simples que permite restaurar consoles ocultos; Sair encerra o aplicativo.
+- Conquistas, filtros, favoritos e aparencia aparecem na barra, mas ainda estao marcados como recursos em desenvolvimento.
+- O carrossel, o cabecalho, o titulo e o rodape agora usam a largura restante a direita da barra lateral.
+- Validacao realizada: `gcc -std=c11 -fsyntax-only -Wall -Wextra` para `ui_menu.c`, `ui_theme.c` e `console_registry.c`, usando declaracoes SDL simuladas. A compilacao e execucao com SDL2 real ainda precisam ser verificadas no ambiente Windows do projeto.

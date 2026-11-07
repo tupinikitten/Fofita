@@ -3,8 +3,8 @@
 static const UiTema temas[] = {
     {
         "padrao",
-        "assets/ui/wallpapers/bk-01.jpg",
-        "assets/ui/estilos/escuro",
+        "ui/wallpapers/bk-01.jpg",
+        "ui/styles/dark",
         {177, 208, 245, 255},   /* cor_fundo */
         { 28,  38,  66, 255},   /* texto */
         {255, 255, 255, 170},   /* texto_sombra */

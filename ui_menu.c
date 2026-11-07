@@ -24,8 +24,18 @@
 #define SETA_TAM 28
 #define BOTAO_W 220
 #define BOTAO_H 34
+#define SIDEBAR_RECOLHIDA 68
+#define SIDEBAR_ABERTA 184
+#define SIDEBAR_ITEM_H 58
+#define SIDEBAR_TOPO 104
+#define SIDEBAR_ICON 28
+#define TOTAL_ACOES_LATERAIS 6
 
-typedef enum { FOCO_CABECALHO, FOCO_CARROSSEL, FOCO_SAIR } Foco;
+typedef enum { FOCO_CABECALHO, FOCO_CARROSSEL, FOCO_SAIR, FOCO_SIDEBAR } Foco;
+typedef enum {
+    LATERAL_CONQUISTAS, LATERAL_CONFIGURACOES, LATERAL_FILTROS,
+    LATERAL_FAVORITOS, LATERAL_APARENCIA, LATERAL_SAIR
+} AcaoLateral;
 
 typedef struct {
     const ConsoleConfig *cfg;
@@ -48,6 +58,22 @@ static int total_ocultos = 0;
 static SDL_Texture *wallpaper = NULL;
 static SDL_Texture *seta_esq = NULL;
 static SDL_Texture *seta_dir = NULL;
+static SDL_Texture *icones_laterais[TOTAL_ACOES_LATERAIS] = {0};
+static const char *const caminhos_icones_laterais[TOTAL_ACOES_LATERAIS] = {
+    "ui/styles/dark/icons/trophy_icon.png",
+    "ui/styles/dark/icons/settings_icon.png",
+    "ui/styles/dark/icons/filter_icon.png",
+    "ui/styles/dark/icons/heart_icon.png",
+    "ui/styles/dark/icons/brush_icon.png",
+    "ui/styles/dark/icons/out_icon.png"
+};
+static const char *const nomes_laterais[TOTAL_ACOES_LATERAIS] = {
+    "Conquistas", "Configuracoes", "Filtros", "Favoritos", "Aparencia", "Sair"
+};
+static int sidebar_aberta = 0;
+static int item_lateral = LATERAL_CONFIGURACOES;
+static int tela_configuracoes = 0;
+static int opcao_configuracoes = 0;
 
 static Foco foco = FOCO_CARROSSEL;
 static char aviso[128] = "";
@@ -186,6 +212,9 @@ int ui_menu_init(void) {
     snprintf(caminho, sizeof(caminho), "%s/arrows/right_arrow.png", tema->pasta_estilo);
     seta_dir = carregar_textura(caminho, NULL, NULL);
 
+    for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i)
+        icones_laterais[i] = carregar_textura(caminhos_icones_laterais[i], NULL, NULL);
+
     size_t quantidade = 0;
     const ConsoleConfig *todos = console_registry_get_all(&quantidade);
 
@@ -204,6 +233,8 @@ int ui_menu_init(void) {
     reconstruir_visiveis(NULL);
     aplicar_selecao();
     foco = FOCO_CARROSSEL;
+    sidebar_aberta = 0;
+    item_lateral = LATERAL_CONFIGURACOES;
     return 1;
 }
 
@@ -214,6 +245,8 @@ void ui_menu_fechar(void) {
     if (wallpaper) SDL_DestroyTexture(wallpaper);
     if (seta_esq) SDL_DestroyTexture(seta_esq);
     if (seta_dir) SDL_DestroyTexture(seta_dir);
+    for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i)
+        if (icones_laterais[i]) SDL_DestroyTexture(icones_laterais[i]);
 
     wallpaper = seta_esq = seta_dir = NULL;
     total_itens = total_visiveis = sel = 0;
@@ -240,6 +273,61 @@ static int tecla_confirmar(SDL_Keycode t) {
 }
 
 MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
+    if (tela_configuracoes) {
+        if (tecla == SDLK_UP || tecla == SDLK_DOWN)
+            opcao_configuracoes = 1 - opcao_configuracoes;
+        else if (tecla == SDLK_ESCAPE || (tecla == SDLK_LEFT && opcao_configuracoes == 1))
+            tela_configuracoes = 0;
+        else if (tecla_confirmar(tecla)) {
+            if (opcao_configuracoes == 0) {
+                mostrar_todos_consoles();
+            } else {
+                tela_configuracoes = 0;
+            }
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+
+    if (tecla == SDLK_TAB) {
+        sidebar_aberta = !sidebar_aberta;
+        foco = FOCO_SIDEBAR;
+        return MENU_ACAO_NENHUMA;
+    }
+
+    if (foco == FOCO_SIDEBAR) {
+        if (tecla == SDLK_UP) {
+            item_lateral = (item_lateral + TOTAL_ACOES_LATERAIS - 1) % TOTAL_ACOES_LATERAIS;
+        } else if (tecla == SDLK_DOWN) {
+            item_lateral = (item_lateral + 1) % TOTAL_ACOES_LATERAIS;
+        } else if (tecla == SDLK_RIGHT || tecla == SDLK_ESCAPE) {
+            foco = FOCO_CARROSSEL;
+        } else if (tecla == SDLK_LEFT) {
+            sidebar_aberta = !sidebar_aberta;
+        } else if (tecla_confirmar(tecla)) {
+            switch (item_lateral) {
+            case LATERAL_SAIR:
+                return MENU_ACAO_SAIR;
+            case LATERAL_CONFIGURACOES:
+                tela_configuracoes = 1;
+                opcao_configuracoes = 0;
+                break;
+            case LATERAL_APARENCIA:
+                ui_menu_aviso("Personalizacao: em desenvolvimento");
+                break;
+            case LATERAL_CONQUISTAS:
+                ui_menu_aviso("RetroAchievements: em desenvolvimento");
+                break;
+            case LATERAL_FILTROS:
+                ui_menu_aviso("Filtros: em desenvolvimento");
+                break;
+            case LATERAL_FAVORITOS:
+                ui_menu_aviso("Favoritos: em desenvolvimento");
+                break;
+            }
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+
     switch (foco) {
     case FOCO_CABECALHO:
         if (tecla == SDLK_LEFT) trocar_console(-1);
@@ -265,7 +353,10 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
 
     case FOCO_SAIR:
         if (tecla == SDLK_UP) foco = FOCO_CARROSSEL;
+        else if (tecla == SDLK_LEFT) foco = FOCO_SIDEBAR;
         else if (tecla_confirmar(tecla)) return MENU_ACAO_SAIR;
+        break;
+    case FOCO_SIDEBAR:
         break;
     }
 
@@ -334,13 +425,14 @@ static void desenhar_encaixado(SDL_Texture *tex, int w, int h, SDL_Rect caixa, U
     SDL_SetTextureAlphaMod(tex, 255);
 }
 
-static void desenhar_cabecalho(int vw) {
+static void desenhar_cabecalho(int x_area, int largura_area) {
+    int vw = largura_area;
     const UiTema *tema = ui_tema_atual();
 
     if (total_visiveis == 0) {
-        ui_texto_desenhar_centro("Nenhum console ativo", vw / 2, 30, 2,
+        ui_texto_desenhar_centro("Nenhum console ativo", x_area + vw / 2, 30, 2,
                                  tema->texto, tema->texto_sombra);
-        ui_texto_desenhar_centro("Confira a pasta cores/", vw / 2, 52, 2,
+        ui_texto_desenhar_centro("Confira a pasta cores/", x_area + vw / 2, 52, 2,
                                  tema->texto_suave, tema->texto_sombra);
         return;
     }
@@ -358,7 +450,7 @@ static void desenhar_cabecalho(int vw) {
     int mostrados = total_visiveis - inicio;
     if (mostrados > max_slots) mostrados = max_slots;
 
-    int x0 = (vw - mostrados * SLOT_W) / 2;
+    int x0 = x_area + (vw - mostrados * SLOT_W) / 2;
     const int y0 = 6;
 
     for (int k = 0; k < mostrados; ++k) {
@@ -393,10 +485,10 @@ static void desenhar_cabecalho(int vw) {
 
     char nome[96];
     ui_texto_ajustar(console_selecionado()->nome, vw - 40, 2, nome, sizeof(nome));
-    ui_texto_desenhar_centro(nome, vw / 2, y0 + SLOT_H + 6, 2, tema->texto, tema->texto_sombra);
+    ui_texto_desenhar_centro(nome, x_area + vw / 2, y0 + SLOT_H + 6, 2, tema->texto, tema->texto_sombra);
 }
 
-static void desenhar_linha_titulo(int vw, int y) {
+static void desenhar_linha_titulo(int x_area, int vw, int y) {
     const UiTema *tema = ui_tema_atual();
 
     if (carousel_total_visiveis() == 0) return;
@@ -406,26 +498,26 @@ static void desenhar_linha_titulo(int vw, int y) {
 
     int max_texto = vw - 2 * (SETA_TAM + 36);
     ui_texto_ajustar(bruto, max_texto, 2, nome, sizeof(nome));
-    ui_texto_desenhar_centro(nome, vw / 2, y + 2, 2, tema->texto, tema->texto_sombra);
+    ui_texto_desenhar_centro(nome, x_area + vw / 2, y + 2, 2, tema->texto, tema->texto_sombra);
 
     snprintf(contador, sizeof(contador), "%zu / %zu",
              carousel_posicao_atual() + 1, carousel_total_visiveis());
-    ui_texto_desenhar_centro(contador, vw / 2, y + 24, 2, tema->texto_suave, tema->texto_sombra);
+    ui_texto_desenhar_centro(contador, x_area + vw / 2, y + 24, 2, tema->texto_suave, tema->texto_sombra);
 
     if (carousel_total_visiveis() > 1) {
         int meio = ui_texto_largura(nome, 2) / 2;
         Uint8 alfa = foco == FOCO_CARROSSEL ? 255 : 130;
-        SDL_Rect esq = { vw / 2 - meio - 16 - SETA_TAM, y + 8, SETA_TAM, SETA_TAM };
-        SDL_Rect dir = { vw / 2 + meio + 16, y + 8, SETA_TAM, SETA_TAM };
+        SDL_Rect esq = { x_area + vw / 2 - meio - 16 - SETA_TAM, y + 8, SETA_TAM, SETA_TAM };
+        SDL_Rect dir = { x_area + vw / 2 + meio + 16, y + 8, SETA_TAM, SETA_TAM };
 
         desenhar_encaixado(seta_esq, 512, 512, esq, alfa);
         desenhar_encaixado(seta_dir, 512, 512, dir, alfa);
     }
 }
 
-static void desenhar_rodape(int vw, int y) {
+static void desenhar_rodape(int x_area, int vw, int y) {
     const UiTema *tema = ui_tema_atual();
-    SDL_Rect botao = { (vw - BOTAO_W) / 2, y + (ALTURA_RODAPE - BOTAO_H) / 2, BOTAO_W, BOTAO_H };
+    SDL_Rect botao = { x_area + (vw - BOTAO_W) / 2, y + (ALTURA_RODAPE - BOTAO_H) / 2, BOTAO_W, BOTAO_H };
     int em_foco = (foco == FOCO_SAIR);
 
     if (em_foco) {
@@ -443,6 +535,42 @@ static void desenhar_rodape(int vw, int y) {
                              cor_texto, em_foco ? sem_sombra : tema->texto_sombra);
 }
 
+static void desenhar_sidebar(int vh) {
+    const UiTema *tema = ui_tema_atual();
+    int largura = sidebar_aberta ? SIDEBAR_ABERTA : SIDEBAR_RECOLHIDA;
+    SDL_Rect fundo = { 0, 0, largura, vh };
+    preencher(fundo, (SDL_Color){ 18, 24, 40, 220 });
+    preencher((SDL_Rect){ largura - 1, 0, 1, vh }, tema->destaque);
+
+    for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i) {
+        int y = SIDEBAR_TOPO + i * SIDEBAR_ITEM_H;
+        SDL_Rect item = { 6, y, largura - 12, SIDEBAR_ITEM_H - 5 };
+        int ativo = (foco == FOCO_SIDEBAR && item_lateral == i);
+        if (ativo) preencher(item, tema->destaque);
+        else if (i == LATERAL_SAIR) {
+            /* Separacao visual para a acao de encerrar. */
+            preencher((SDL_Rect){ 12, y - 8, largura - 24, 1 }, (SDL_Color){ 255,255,255,70 });
+        }
+
+        if (icones_laterais[i]) {
+            SDL_Rect caixa = { 18, y + (SIDEBAR_ITEM_H - SIDEBAR_ICON - 5) / 2,
+                               SIDEBAR_ICON, SIDEBAR_ICON };
+            desenhar_encaixado(icones_laterais[i], SIDEBAR_ICON, SIDEBAR_ICON,
+                               caixa, ativo ? 255 : 210);
+        }
+        if (sidebar_aberta) {
+            SDL_Color cor = ativo ? (SDL_Color){255,255,255,255} : tema->texto;
+            ui_texto_desenhar(nomes_laterais[i], 58, y + 20, 1, cor,
+                              ativo ? (SDL_Color){0,0,0,0} : tema->texto_sombra);
+        }
+    }
+
+    /* Indicador discreto de que Tab expande/recolhe a barra. */
+    const char *dica = sidebar_aberta ? "TAB <" : "TAB >";
+    ui_texto_desenhar_centro(dica, largura / 2, vh - 24, 1,
+                             tema->texto_suave, (SDL_Color){0,0,0,0});
+}
+
 void ui_menu_desenhar(void) {
     const UiTema *tema = ui_tema_atual();
     int vw = 800, vh = 600;
@@ -452,9 +580,17 @@ void ui_menu_desenhar(void) {
     if (vh <= 0) vh = 600;
 
     desenhar_fundo(vw, vh);
-    desenhar_cabecalho(vw);
+    desenhar_sidebar(vh);
 
-    SDL_Rect area = { 0, ALTURA_CABECALHO, vw, vh - ALTURA_CABECALHO - ALTURA_TITULO - ALTURA_RODAPE };
+    int sidebar_w = sidebar_aberta ? SIDEBAR_ABERTA : SIDEBAR_RECOLHIDA;
+    int x_area = sidebar_w;
+    int largura_area = vw - sidebar_w;
+    if (largura_area < 1) largura_area = 1;
+
+    desenhar_cabecalho(x_area, largura_area);
+
+    SDL_Rect area = { x_area, ALTURA_CABECALHO, largura_area,
+                      vh - ALTURA_CABECALHO - ALTURA_TITULO - ALTURA_RODAPE };
     if (area.h < 0) area.h = 0;
 
     if (total_visiveis > 0) {
@@ -463,24 +599,47 @@ void ui_menu_desenhar(void) {
         } else {
             char pasta[160];
             snprintf(pasta, sizeof(pasta), "Coloque as ROMs em %s/", console_selecionado()->pasta_roms);
-            ui_texto_desenhar_centro("Nenhuma ROM encontrada", vw / 2, area.y + area.h / 2 - 20, 2,
+            ui_texto_desenhar_centro("Nenhuma ROM encontrada", x_area + largura_area / 2,
+                                     area.y + area.h / 2 - 20, 2,
                                      tema->texto, tema->texto_sombra);
-            ui_texto_desenhar_centro(pasta, vw / 2, area.y + area.h / 2 + 4, 2,
+            ui_texto_desenhar_centro(pasta, x_area + largura_area / 2,
+                                     area.y + area.h / 2 + 4, 2,
                                      tema->texto_suave, tema->texto_sombra);
         }
     }
 
     int titulo_y = area.y + area.h;
-    desenhar_linha_titulo(vw, titulo_y);
-    desenhar_rodape(vw, titulo_y + ALTURA_TITULO);
+    desenhar_linha_titulo(x_area, largura_area, titulo_y);
+    desenhar_rodape(x_area, largura_area, titulo_y + ALTURA_TITULO);
 
     if (aviso[0] && SDL_GetTicks() < aviso_ate) {
         int larg = ui_texto_largura(aviso, 2) + 24;
-        SDL_Rect faixa = { (vw - larg) / 2, area.y + 4, larg, ui_texto_altura(2) + 12 };
-
+        SDL_Rect faixa = { x_area + (largura_area - larg) / 2, area.y + 4,
+                           larg, ui_texto_altura(2) + 12 };
         preencher(faixa, tema->painel);
         contorno(faixa, 1, tema->aviso);
-        ui_texto_desenhar_centro(aviso, vw / 2, faixa.y + 6, 2, tema->aviso,
-                                 (SDL_Color){ 0, 0, 0, 0 });
+        ui_texto_desenhar_centro(aviso, x_area + largura_area / 2, faixa.y + 6, 2,
+                                 tema->aviso, (SDL_Color){ 0, 0, 0, 0 });
+    }
+
+    if (tela_configuracoes) {
+        SDL_Rect painel = { x_area + (largura_area - 420) / 2, vh / 2 - 112, 420, 224 };
+        preencher(painel, (SDL_Color){ 18, 24, 40, 245 });
+        contorno(painel, 2, tema->destaque);
+        ui_texto_desenhar_centro("CONFIGURACOES", painel.x + painel.w / 2,
+                                 painel.y + 24, 2, tema->texto,
+                                 (SDL_Color){0,0,0,0});
+        SDL_Rect op1 = { painel.x + 24, painel.y + 82, painel.w - 48, 42 };
+        SDL_Rect op2 = { painel.x + 24, painel.y + 136, painel.w - 48, 42 };
+        if (opcao_configuracoes == 0) preencher(op1, tema->destaque);
+        else preencher(op1, tema->painel);
+        if (opcao_configuracoes == 1) preencher(op2, tema->destaque);
+        else preencher(op2, tema->painel);
+        SDL_Color c1 = opcao_configuracoes == 0 ? (SDL_Color){255,255,255,255} : tema->texto;
+        SDL_Color c2 = opcao_configuracoes == 1 ? (SDL_Color){255,255,255,255} : tema->texto;
+        ui_texto_desenhar_centro("Restaurar consoles ocultos", op1.x + op1.w / 2,
+                                 op1.y + 15, 1, c1, (SDL_Color){0,0,0,0});
+        ui_texto_desenhar_centro("Voltar ao menu", op2.x + op2.w / 2,
+                                 op2.y + 15, 1, c2, (SDL_Color){0,0,0,0});
     }
 }
