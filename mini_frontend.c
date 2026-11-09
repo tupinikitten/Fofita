@@ -12,6 +12,42 @@
 /* true enquanto o menu esta na tela; input.c usa isto para nao repassar teclas ao jogo. */
 bool em_menu = true;
 
+/*
+ * Desenha o frame do Libretro sem alterar sua proporcao.
+ * Em telas mais largas/altas que o jogo, centraliza a imagem e deixa
+ * barras pretas nas areas restantes (letterbox/pillarbox).
+ */
+static void desenhar_jogo_com_proporcao(void) {
+    if (!textura_jogo) return;
+
+    int janela_w = 0, janela_h = 0;
+    int jogo_w = 0, jogo_h = 0;
+    SDL_GetRendererOutputSize(renderer, &janela_w, &janela_h);
+    SDL_QueryTexture(textura_jogo, NULL, NULL, &jogo_w, &jogo_h);
+
+    if (janela_w <= 0 || janela_h <= 0 || jogo_w <= 0 || jogo_h <= 0)
+        return;
+
+    float proporcao = proporcao_video > 0.0f
+        ? proporcao_video
+        : (float)jogo_w / (float)jogo_h;
+    int destino_w = janela_w;
+    int destino_h = (int)(destino_w / proporcao + 0.5f);
+
+    if (destino_h > janela_h) {
+        destino_h = janela_h;
+        destino_w = (int)(destino_h * proporcao + 0.5f);
+    }
+    SDL_Rect destino = {
+        (janela_w - destino_w) / 2,
+        (janela_h - destino_h) / 2,
+        destino_w,
+        destino_h
+    };
+
+    SDL_RenderCopy(renderer, textura_jogo, NULL, &destino);
+}
+
 /* Carrega o nucleo do console selecionado e a ROM em foco. */
 static bool iniciar_jogo_atual(void) {
     const ConsoleConfig *console = ui_menu_console_atual();
@@ -22,6 +58,7 @@ static bool iniciar_jogo_atual(void) {
         return false;
     }
 
+    proporcao_video = 0.0f;
     if (!init_core(console->caminho_core)) {
         ui_menu_aviso("Falha ao carregar o nucleo do console");
         return false;
@@ -43,6 +80,7 @@ static bool iniciar_jogo_atual(void) {
 /* Encerra o jogo atual e volta ao menu, sem fechar o aplicativo. */
 static void voltar_ao_menu(void) {
     close_core();               /* descarrega o jogo, libera a ROM e o nucleo */
+    proporcao_video = 0.0f;
     descartar_textura_jogo();
     limpar_audio();
     em_menu = true;
@@ -93,13 +131,15 @@ int main(int argc, char *argv[]) {
             }
         }
 
+        /* O fundo preto tambem preenche as barras do video em letterbox. */
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
         if (em_menu) {
             ui_menu_desenhar();
         } else {
             run_core();
-            if (textura_jogo) SDL_RenderCopy(renderer, textura_jogo, NULL, NULL);
+            desenhar_jogo_com_proporcao();
         }
 
         SDL_RenderPresent(renderer);

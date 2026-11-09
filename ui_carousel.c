@@ -322,19 +322,23 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
 void desenhar_carousel(SDL_Rect area) {
     if (total_visiveis == 0 || area.w <= 0 || area.h <= 0) return;
 
-    /* Margem vertical para a flutuacao do cartucho em foco (+-10 px). */
-    const int margem_flutuacao = 14;
-
-    int cart_box = area.h - 2 * margem_flutuacao;
-    if (cart_box > area.w) cart_box = area.w;
+    /*
+     * O tamanho deixa de acompanhar toda a altura disponivel. O layout de
+     * referencia usa cartuchos compactos; limitamos a caixa por altura e
+     * largura para manter margens generosas em 16:9 e em janelas menores.
+     */
+    int cart_box = (int)(area.h * 0.62f);
+    int limite_largura = (int)(area.w * 0.30f);
+    if (cart_box > limite_largura) cart_box = limite_largura;
+    if (cart_box > 340) cart_box = 340;
     if (cart_box < 64) cart_box = 64;
 
-    /* Mesmas proporcoes de antes: lateral = 70% e afastamento = 75% do principal. */
-    const int side_box = cart_box * 7 / 10;
-    const int side_offset = cart_box * 3 / 4;
+    /* Laterais menores e mais proximas, sem competir com o cartucho em foco. */
+    const int side_box = cart_box * 76 / 100;
+    const int side_offset = cart_box * 82 / 100;
 
     const int center_x = area.x + area.w / 2;
-    const int center_y = area.y + area.h / 2;
+    const int center_y = area.y + (int)(area.h * 0.47f);
     const int main_x = center_x - cart_box / 2;
     const int main_y = center_y - cart_box / 2;
 
@@ -352,7 +356,7 @@ void desenhar_carousel(SDL_Rect area) {
     }
 
     float tempo = SDL_GetTicks() / 300.0f;
-    int flutuacao_y = (int)(sin(tempo) * 10.0f);
+    int flutuacao_y = (int)(sin(tempo) * 5.0f);
 
     desenhar_jogo(indices[foco_atual],
         (SDL_Rect){main_x, main_y + flutuacao_y, cart_box, cart_box}, 255);

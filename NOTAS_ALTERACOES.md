@@ -81,3 +81,26 @@ Neste ambiente nao ha SDL2 nem MinGW. Todos os arquivos passaram em `gcc -fsynta
 - Conquistas, filtros, favoritos e aparencia aparecem na barra, mas ainda estao marcados como recursos em desenvolvimento.
 - O carrossel, o cabecalho, o titulo e o rodape agora usam a largura restante a direita da barra lateral.
 - Validacao realizada: `gcc -std=c11 -fsyntax-only -Wall -Wextra` para `ui_menu.c`, `ui_theme.c` e `console_registry.c`, usando declaracoes SDL simuladas. A compilacao e execucao com SDL2 real ainda precisam ser verificadas no ambiente Windows do projeto.
+
+
+### Ajuste de resolucao e proporcao do video (07/11/2026)
+- A janela inicial agora abre em 1280x720 (16:9) e pode ser redimensionada.
+- Durante a execucao, a proporcao declarada pelo core Libretro (`RETRO_ENVIRONMENT_SET_GEOMETRY`) e priorizada; quando nao informada, usa-se a proporcao dos pixels recebidos. O frame e centralizado e escalado proporcionalmente, com barras pretas quando a janela e o jogo tem proporcoes diferentes.
+- A textura de video e recriada se o nucleo alterar a resolucao durante a execucao.
+- A interface do menu continua usando o tamanho real de saida do renderer, sem aplicar uma escala global que pudesse deformar os elementos.
+- Validacao nesta etapa: revisao do diff e da logica de calculo. A compilacao com SDL2/MinGW e o teste visual no Windows ainda precisam ser realizados; este ambiente nao possui os headers SDL2 nem o compilador MinGW.
+
+
+## Ajustes de composição do menu (2026-11-09)
+
+- Reduzida a faixa superior e compactados os espaços dos ícones de consoles.
+- Removida a moldura preenchida ao redor do console selecionado; o destaque agora
+  é feito pelo tamanho e pela opacidade do ícone.
+- Redimensionado o carrossel de cartuchos com limites proporcionais à área e à
+  largura da janela, evitando que o cartucho central ocupe quase toda a tela.
+- Reduzidos os cartuchos laterais e o deslocamento entre eles.
+- Reduzida a flutuação vertical do cartucho selecionado.
+- Barra lateral com fundo neutro semitransparente e seleção menos pesada,
+  independente da imagem do wallpaper.
+- Removido o botão inferior "Sair do Fofita"; a ação continua disponível na barra lateral.
+- Reservada uma faixa inferior livre para a futura animação de encaixe do cartucho.

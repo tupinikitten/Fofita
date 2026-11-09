@@ -10,6 +10,7 @@ extern SDL_Window *window;
 extern SDL_Renderer *renderer;
 extern SDL_Texture *textura_jogo;
 extern int formato_de_cor;
+extern float proporcao_video; /* aspect ratio informado pelo core Libretro, se disponivel */
 
 bool init_video_audio(void);
 void fechar_video_audio(void);

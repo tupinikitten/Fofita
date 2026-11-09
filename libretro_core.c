@@ -26,7 +26,19 @@ static int jogo_carregado = 0;
 extern void retro_input_poll_cb(void);
 extern int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id);
 
-bool retro_environment_cb(unsigned cmd, void *data) { 
+bool retro_environment_cb(unsigned cmd, void *data) {
+    if (cmd == RETRO_ENVIRONMENT_SET_GEOMETRY) {
+        const struct retro_game_geometry *geometria =
+            (const struct retro_game_geometry *)data;
+        if (!geometria) return false;
+        proporcao_video = geometria->aspect_ratio > 0.0f
+            ? geometria->aspect_ratio
+            : (geometria->base_height > 0
+                ? (float)geometria->base_width / (float)geometria->base_height
+                : 0.0f);
+        return true;
+    }
+
     if (cmd == RETRO_ENVIRONMENT_SET_PIXEL_FORMAT) {
         enum retro_pixel_format *fmt = (enum retro_pixel_format *)data;
         if (*fmt == RETRO_PIXEL_FORMAT_XRGB8888) { formato_de_cor = SDL_PIXELFORMAT_ARGB8888; return true; }

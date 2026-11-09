@@ -7,6 +7,7 @@ SDL_Texture *textura_jogo = NULL;
 SDL_AudioDeviceID dispositivo_audio;
 
 int formato_de_cor = SDL_PIXELFORMAT_RGB555;
+float proporcao_video = 0.0f;
 
 bool init_video_audio(void) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
@@ -21,7 +22,8 @@ bool init_video_audio(void) {
     dispositivo_audio = SDL_OpenAudioDevice(NULL, 0, &esp_audio, NULL, 0);
     SDL_PauseAudioDevice(dispositivo_audio, 0);
 
-    window = SDL_CreateWindow("Frontend Independente", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Fofita", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                  1280, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
     return true;
@@ -50,10 +52,19 @@ void limpar_audio(void) {
 
 void retro_video_refresh_cb(const void *data, unsigned width, unsigned height, size_t pitch) {
     if (data) {
-        if (!textura_jogo) {
-            textura_jogo = SDL_CreateTexture(renderer, formato_de_cor, SDL_TEXTUREACCESS_STREAMING, width, height);
+        int textura_w = 0, textura_h = 0;
+        if (textura_jogo)
+            SDL_QueryTexture(textura_jogo, NULL, NULL, &textura_w, &textura_h);
+
+        /* Alguns nucleos podem alterar a resolucao durante a execucao. */
+        if (!textura_jogo || textura_w != (int)width || textura_h != (int)height) {
+            descartar_textura_jogo();
+            textura_jogo = SDL_CreateTexture(renderer, formato_de_cor,
+                                             SDL_TEXTUREACCESS_STREAMING,
+                                             (int)width, (int)height);
+            if (!textura_jogo) return;
         }
-        SDL_UpdateTexture(textura_jogo, NULL, data, pitch);
+        SDL_UpdateTexture(textura_jogo, NULL, data, (int)pitch);
     }
 }
 

@@ -13,22 +13,20 @@
 #define ARQUIVO_CONFIG "fofita_menu.cfg"
 #define DURACAO_AVISO_MS 3500
 
-/* Layout (janela de 800x600): cabecalho, carrossel, linha do titulo, rodape. */
-#define ALTURA_CABECALHO 96
-#define ALTURA_TITULO 44
-#define ALTURA_RODAPE 60
-#define SLOT_W 104
-#define SLOT_H 64
-#define ICONE_MAX_W 72
-#define ICONE_MAX_H 48
-#define SETA_TAM 28
-#define BOTAO_W 220
-#define BOTAO_H 34
-#define SIDEBAR_RECOLHIDA 68
-#define SIDEBAR_ABERTA 184
-#define SIDEBAR_ITEM_H 58
-#define SIDEBAR_TOPO 104
-#define SIDEBAR_ICON 28
+/* Layout responsivo: faixa superior compacta, carrossel e area livre inferior. */
+#define ALTURA_CABECALHO 82
+#define ALTURA_TITULO 48
+#define AREA_ANIMACAO_FUTURA 104
+#define SLOT_W 88
+#define SLOT_H 58
+#define ICONE_MAX_W 62
+#define ICONE_MAX_H 42
+#define SETA_TAM 24
+#define SIDEBAR_RECOLHIDA 62
+#define SIDEBAR_ABERTA 154
+#define SIDEBAR_ITEM_H 56
+#define SIDEBAR_TOPO 88
+#define SIDEBAR_ICON 26
 #define TOTAL_ACOES_LATERAIS 6
 
 typedef enum { FOCO_CABECALHO, FOCO_CARROSSEL, FOCO_SAIR, FOCO_SIDEBAR } Foco;
@@ -343,7 +341,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         if (tecla == SDLK_LEFT) mover_carousel_esquerda();
         else if (tecla == SDLK_RIGHT) mover_carousel_direita();
         else if (tecla == SDLK_UP) foco = FOCO_CABECALHO;
-        else if (tecla == SDLK_DOWN) foco = FOCO_SAIR;
+        else if (tecla == SDLK_DOWN) foco = FOCO_CARROSSEL;
         else if (tecla_confirmar(tecla)) {
             if (total_visiveis > 0 && carousel_total_visiveis() > 0)
                 return MENU_ACAO_INICIAR_JOGO;
@@ -459,18 +457,15 @@ static void desenhar_cabecalho(int x_area, int largura_area) {
         int selecionado = (pos == sel);
         SDL_Rect slot = { x0 + k * SLOT_W + 4, y0, SLOT_W - 8, SLOT_H };
 
-        if (selecionado) {
-            preencher(slot, tema->painel);
-            contorno(slot, foco == FOCO_CABECALHO ? 3 : 1, tema->destaque);
-        }
-
-        SDL_Rect caixa_icone = { slot.x + (slot.w - ICONE_MAX_W) / 2,
-                                 slot.y + (slot.h - ICONE_MAX_H) / 2,
-                                 ICONE_MAX_W, ICONE_MAX_H };
+        int icone_w = selecionado ? ICONE_MAX_W : ICONE_MAX_W - 10;
+        int icone_h = selecionado ? ICONE_MAX_H : ICONE_MAX_H - 6;
+        SDL_Rect caixa_icone = { slot.x + (slot.w - icone_w) / 2,
+                                 slot.y + (slot.h - icone_h) / 2,
+                                 icone_w, icone_h };
 
         if (item->icone) {
             desenhar_encaixado(item->icone, item->icone_w, item->icone_h,
-                               caixa_icone, selecionado ? 255 : 140);
+                               caixa_icone, selecionado ? 255 : 175);
         } else {
             /* Sem icone: mostra o identificador do console. */
             char sigla[TAM_ID];
@@ -485,7 +480,7 @@ static void desenhar_cabecalho(int x_area, int largura_area) {
 
     char nome[96];
     ui_texto_ajustar(console_selecionado()->nome, vw - 40, 2, nome, sizeof(nome));
-    ui_texto_desenhar_centro(nome, x_area + vw / 2, y0 + SLOT_H + 6, 2, tema->texto, tema->texto_sombra);
+    ui_texto_desenhar_centro(nome, x_area + vw / 2, y0 + SLOT_H + 2, 2, tema->texto, tema->texto_sombra);
 }
 
 static void desenhar_linha_titulo(int x_area, int vw, int y) {
@@ -515,38 +510,18 @@ static void desenhar_linha_titulo(int x_area, int vw, int y) {
     }
 }
 
-static void desenhar_rodape(int x_area, int vw, int y) {
-    const UiTema *tema = ui_tema_atual();
-    SDL_Rect botao = { x_area + (vw - BOTAO_W) / 2, y + (ALTURA_RODAPE - BOTAO_H) / 2, BOTAO_W, BOTAO_H };
-    int em_foco = (foco == FOCO_SAIR);
-
-    if (em_foco) {
-        preencher(botao, tema->destaque);
-    } else {
-        preencher(botao, tema->painel);
-        contorno(botao, 1, tema->destaque);
-    }
-
-    SDL_Color cor_texto = em_foco ? (SDL_Color){ 255, 255, 255, 255 } : tema->texto;
-    SDL_Color sem_sombra = { 0, 0, 0, 0 };
-
-    ui_texto_desenhar_centro("Sair do Fofita", botao.x + botao.w / 2,
-                             botao.y + (botao.h - ui_texto_altura(2)) / 2, 2,
-                             cor_texto, em_foco ? sem_sombra : tema->texto_sombra);
-}
-
 static void desenhar_sidebar(int vh) {
     const UiTema *tema = ui_tema_atual();
     int largura = sidebar_aberta ? SIDEBAR_ABERTA : SIDEBAR_RECOLHIDA;
     SDL_Rect fundo = { 0, 0, largura, vh };
-    preencher(fundo, (SDL_Color){ 18, 24, 40, 220 });
-    preencher((SDL_Rect){ largura - 1, 0, 1, vh }, tema->destaque);
+    preencher(fundo, (SDL_Color){ 28, 34, 46, 142 });
+    preencher((SDL_Rect){ largura - 1, 0, 1, vh }, (SDL_Color){ 255, 255, 255, 70 });
 
     for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i) {
         int y = SIDEBAR_TOPO + i * SIDEBAR_ITEM_H;
         SDL_Rect item = { 6, y, largura - 12, SIDEBAR_ITEM_H - 5 };
         int ativo = (foco == FOCO_SIDEBAR && item_lateral == i);
-        if (ativo) preencher(item, tema->destaque);
+        if (ativo) preencher(item, (SDL_Color){ tema->destaque.r, tema->destaque.g, tema->destaque.b, 150 });
         else if (i == LATERAL_SAIR) {
             /* Separacao visual para a acao de encerrar. */
             preencher((SDL_Rect){ 12, y - 8, largura - 24, 1 }, (SDL_Color){ 255,255,255,70 });
@@ -590,7 +565,7 @@ void ui_menu_desenhar(void) {
     desenhar_cabecalho(x_area, largura_area);
 
     SDL_Rect area = { x_area, ALTURA_CABECALHO, largura_area,
-                      vh - ALTURA_CABECALHO - ALTURA_TITULO - ALTURA_RODAPE };
+                      vh - ALTURA_CABECALHO - ALTURA_TITULO - AREA_ANIMACAO_FUTURA };
     if (area.h < 0) area.h = 0;
 
     if (total_visiveis > 0) {
@@ -610,7 +585,7 @@ void ui_menu_desenhar(void) {
 
     int titulo_y = area.y + area.h;
     desenhar_linha_titulo(x_area, largura_area, titulo_y);
-    desenhar_rodape(x_area, largura_area, titulo_y + ALTURA_TITULO);
+    /* A faixa inferior permanece livre para a futura animacao de encaixe. */
 
     if (aviso[0] && SDL_GetTicks() < aviso_ate) {
         int larg = ui_texto_largura(aviso, 2) + 24;
