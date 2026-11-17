@@ -87,7 +87,7 @@ static char preview_custom_path[1024] = "";
 static Uint32 animacao_slot_inicio = 0;
 
 static const char *const nomes_laterais[TOTAL_ACOES_LATERAIS] = {
-    "RetroAchievements", "Configurações", "Filtros", "Favoritos", "Customização", "Sair"
+    "Conquistas", "Configurações", "Filtros", "Favoritos", "Aparência", "Sair"
 };
 static int sidebar_aberta = 0;
 static int item_lateral = LATERAL_CONFIGURACOES;
@@ -1139,9 +1139,14 @@ static void desenhar_sidebar(int vh) {
         arredondado(painel,28,vidro,0);
         arredondado(painel,28,claro?(SDL_Color){248,253,255,205}:(SDL_Color){191,207,242,110},1);
         SDL_Rect botao={painel.x+16,painel.y+14,40,40};
-        arredondado(botao,20,(SDL_Color){255,255,255,36},0);
-        arredondado(botao,20,(SDL_Color){texto.r,texto.g,texto.b,225},1);
-        ui_texto_desenhar_centro("^",botao.x+botao.w/2,botao.y+9,1,texto,(SDL_Color){0,0,0,0});
+        arredondado(botao,20,(SDL_Color){255,255,255,20},0);
+        contorno_selecao(botao,19,(SDL_Color){texto.r,texto.g,texto.b,215});
+        /* Chevron geometrico, legivel sem depender do atlas da fonte. */
+        SDL_SetRenderDrawColor(renderer,texto.r,texto.g,texto.b,255);
+        for(int t=0;t<2;++t) {
+            icone_linha(botao.x+13,botao.y+23+t,botao.x+20,botao.y+16+t);
+            icone_linha(botao.x+20,botao.y+16+t,botao.x+27,botao.y+23+t);
+        }
     } else {
         desenhar_capsula(painel,
                          preset==PRESET_DARK ? (SDL_Color){14,26,62,195}
@@ -1269,7 +1274,7 @@ void ui_menu_desenhar(void) {
                     (SDL_Color){10,24,46,35},0);
         arredondado(painel,25,fundo,0);
         arredondado(painel,25,borda,1);
-        ui_texto_desenhar(custom?"CUSTOMIZAÇÃO":"CONFIGURAÇÕES",painel.x+20,
+        ui_texto_desenhar(custom?"APARÊNCIA":"CONFIGURAÇÕES",painel.x+20,
                           painel.y+17,2,tinta,(SDL_Color){0,0,0,0});
         int altura_linha=custom?48:45;
         for(int i=0;i<n;++i) {
