@@ -840,27 +840,40 @@ static void desenhar_slot(int cx,int y) {
 }
 static int controle_conectado=0;
 void ui_menu_controle_conectado(int sim) { controle_conectado=sim; }
+/* Rodape alinhado as previas: tres capsulas discretas no canto inferior
+   direito. A identidade cromatica do preset Colorful e unica (#C84682).
+   Mantem as teclas/acoes ja implementadas, sem prometer favorito inexistente. */
 static void desenhar_atalhos(int vw,int vh) {
-    const int claro=preset_ativo()!=PRESET_DARK;
+    const Preset preset=preset_ativo();
+    const int claro=preset!=PRESET_DARK;
     const char *letras_teclado[]={"X","TAB","ESC"};
     const char *letras_controle[]={"A","START","B"};
     const char *acoes[]={"Jogar","Menu","Voltar"};
     const char *const *letras=controle_conectado?letras_controle:letras_teclado;
-    SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){245,247,255,255};
-    SDL_Color bolhas[3]={{214,89,148,255},{182,99,193,255},{221,92,124,255}};
-    int x=vw-320,y=vh-41;
+    const SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){245,247,255,255};
+    const SDL_Color rosa_rodape={0xC8,0x46,0x82,255};
+    const SDL_Color cor_bolha=preset==PRESET_COLORFUL ? rosa_rodape : tinta;
+    const SDL_Color fundo=claro?(SDL_Color){242,249,255,208}:(SDL_Color){23,34,74,208};
+    const SDL_Color borda=claro?(SDL_Color){255,255,255,210}:(SDL_Color){202,218,255,110};
+    const int largura=98,altura=30,espaco=9,margem=16;
+    const int x_inicio=vw-(3*largura+2*espaco)-margem;
+    const int y=vh-altura-12;
+
     for(int i=0;i<3;++i) {
-        SDL_Rect c={x,y,100,30};
-        desenhar_capsula(c,claro?(SDL_Color){235,245,253,214}:(SDL_Color){23,34,74,200},
-                         claro?(SDL_Color){255,255,255,205}:(SDL_Color){202,218,255,100});
-        SDL_Rect bolha={x+4,y+4,22,22};
-        SDL_Color cor_bolha=preset_ativo()==PRESET_COLORFUL?bolhas[i]:tinta;
+        int x=x_inicio+i*(largura+espaco);
+        SDL_Rect capsula={x,y,largura,altura};
+        /* Sombra de baixo contraste, separada do fundo translúcido. */
+        arredondado((SDL_Rect){x+1,y+2,largura,altura},altura/2,
+                    (SDL_Color){18,30,56,claro?28:60},0);
+        desenhar_capsula(capsula,fundo,borda);
+        SDL_Rect bolha={x+5,y+5,20,20};
         desenhar_capsula(bolha,cor_bolha,cor_bolha);
-        ui_texto_desenhar_centro(letras[i],bolha.x+11,bolha.y+4,1,
-                              (SDL_Color){255,255,255,255},
-                              (SDL_Color){0,0,0,0});
-        ui_texto_desenhar(acoes[i],x+30,y+7,1,tinta,(SDL_Color){0,0,0,0});
-        x+=105;
+        ui_texto_desenhar_centro(letras[i],bolha.x+bolha.w/2,
+                                bolha.y+(bolha.h-ui_texto_altura(1))/2,
+                                1,(SDL_Color){255,255,255,255},
+                                (SDL_Color){0,0,0,0});
+        ui_texto_desenhar(acoes[i],x+31,y+(altura-ui_texto_altura(1))/2,
+                         1,tinta,(SDL_Color){0,0,0,0});
     }
 }
 
