@@ -49,6 +49,18 @@ jobs:
             if [ -d "$folder" ]; then cp -a "$folder" dist/Fofita/; fi
           done
 
+          # Pastas vazias nao sao preservadas pelo Git. Criar pasta de ROMs
+          # para testes locais, sem distribuir jogos de terceiros.
+          mkdir -p dist/Fofita/roms/nes
+          printf 'Coloque suas ROMs .nes nesta pasta para testa-las.\n' > dist/Fofita/roms/nes/LEIA-ME.txt
+
+          # Relatorio de recursos: os icones ausentes usam desenho vetorial SDL2.
+          for name in trophy settings filter heart bucket out; do
+            if [ ! -f "dist/Fofita/ui/styles/light/icons/${name}_icon_light.png" ]; then
+              echo "Icone nao versionado: $name; fallback SDL2 sera usado."
+            fi
+          done
+
           # Dependencias PE/Windows (nao usar ldd: ele pode nao encontrar
           # DLLs quando o EXE e analisado no ambiente MSYS2).
           # Percorre tambem as dependencias das DLLs copiadas e dos cores.
