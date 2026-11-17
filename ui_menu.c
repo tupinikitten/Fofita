@@ -295,11 +295,20 @@ static void carregar_icones_preset(void) {
             SDL_DestroyTexture(icones_laterais[i]);
             icones_laterais[i]=NULL;
         }
-        /* Personalizacao tem duas geracoes de assets: brush (original)
-           e bucket (posterior). Preferir brush quando estiver presente. */
+        /* O pincel original usa nomenclatura antiga, sem sufixo de preset.
+           Reutilizar sua silhueta nos 3 temas, preservando alpha e cores
+           de cada modo; nao substitui o PNG original por um desenho SDL2. */
+        if(i==LATERAL_CUSTOMIZACAO) {
+            const char *pincel="ui/styles/dark/icons/brush_icon.png";
+            if(preset==PRESET_DARK)
+                icones_laterais[i]=IMG_LoadTexture(renderer,pincel);
+            else
+                icones_laterais[i]=carregar_icone_tingido(pincel,icone_cor(i));
+        }
+        /* Compatibilidade com as duas geracoes de assets. */
         const char *nome_primario=(i==LATERAL_CUSTOMIZACAO)?"brush":nomes_arquivos[i];
         const char *nome_reserva=(i==LATERAL_CUSTOMIZACAO)?"bucket":NULL;
-        if(preset==PRESET_COLORFUL) {
+        if(!icones_laterais[i] && preset==PRESET_COLORFUL) {
             snprintf(caminho,sizeof(caminho),
                      "ui/styles/colorful/icons/%s_icon_colorful.png",nome_primario);
             icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
@@ -308,7 +317,7 @@ static void carregar_icones_preset(void) {
                          "ui/styles/colorful/icons/%s_icon_colorful.png",nome_reserva);
                 icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
             }
-        } else if(preset==PRESET_DARK) {
+        } else if(!icones_laterais[i] && preset==PRESET_DARK) {
             snprintf(caminho,sizeof(caminho),
                      "ui/styles/dark/icons/%s_icon_dark.png",nome_primario);
             icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
@@ -327,7 +336,7 @@ static void carregar_icones_preset(void) {
                          "ui/styles/light/icons/%s_icon_light.png",nome_reserva);
                 icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
             }
-        } else {
+        } else if(!icones_laterais[i]) {
             snprintf(caminho,sizeof(caminho),
                      "ui/styles/light/icons/%s_icon_light.png",nome_primario);
             icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
