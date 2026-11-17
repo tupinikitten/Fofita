@@ -1,0 +1,23 @@
+{
+  "name": "Fofita - C/SDL2",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.makefile-tools",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "C_Cpp.default.cStandard": "c11",
+        "files.associations": {
+          "*.h": "c"
+        }
+      }
+    }
+  }
+}
