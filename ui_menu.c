@@ -264,39 +264,57 @@ static SDL_Color icone_cor(int indice) {
     if(p==PRESET_COLORFUL) return cores[indice];
     return p==PRESET_DARK ? (SDL_Color){248,249,255,255} : (SDL_Color){33,45,66,255};
 }
+/* Respeita os arquivos originais de cada tema. O tema Dark inclui
+   somente alguns PNGs: os demais usam o Light recolorido. */
+static SDL_Texture *carregar_icone_tingido(const char *caminho, SDL_Color cor) {
+    SDL_Surface *orig=IMG_Load(caminho);
+    if(!orig) return NULL;
+    SDL_Surface *base=SDL_ConvertSurfaceFormat(orig,SDL_PIXELFORMAT_RGBA32,0);
+    SDL_FreeSurface(orig);
+    if(!base) return NULL;
+    if(SDL_MUSTLOCK(base) && SDL_LockSurface(base)!=0) {
+        SDL_FreeSurface(base);
+        return NULL;
+    }
+    for(int y=0;y<base->h;++y) for(int x=0;x<base->w;++x) {
+        Uint32 *px=(Uint32*)((Uint8*)base->pixels+y*base->pitch+x*4);
+        Uint8 rr,gg,bb,a;
+        SDL_GetRGBA(*px,base->format,&rr,&gg,&bb,&a);
+        *px=SDL_MapRGBA(base->format,cor.r,cor.g,cor.b,a);
+    }
+    if(SDL_MUSTLOCK(base)) SDL_UnlockSurface(base);
+    SDL_Texture *tex=SDL_CreateTextureFromSurface(renderer,base);
+    SDL_FreeSurface(base);
+    return tex;
+}
 static void carregar_icones_preset(void) {
     char caminho[256];
-    const char *pastas[]={"light","light","colorful"};
-    /* Assets escuros existem em light; assets claros: o atlas dark esta incompleto,
-       entao tingimos o icone-base via SDL_SetTextureColorMod quando necessario. */
-    const char *pasta=preset_ativo()==PRESET_COLORFUL ? pastas[2] : pastas[0];
-    const char *sufixo=preset_ativo()==PRESET_COLORFUL ? "colorful" : "light";
+    const Preset preset=preset_ativo();
     for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
-        if(icones_laterais[i]) SDL_DestroyTexture(icones_laterais[i]);
-        snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",
-                 pasta,nomes_arquivos[i],sufixo);
-        if(preset_ativo()!=PRESET_COLORFUL) {
-            SDL_Surface *orig=IMG_Load(caminho);
-            if(orig) {
-                SDL_Surface *base=SDL_ConvertSurfaceFormat(orig,SDL_PIXELFORMAT_RGBA32,0);
-                SDL_FreeSurface(orig);
-                if(base) {
-                    SDL_Color c=icone_cor(i);
-                    if(SDL_LockSurface(base)==0) {
-                        for(int y=0;y<base->h;++y) for(int x=0;x<base->w;++x) {
-                            Uint32 *px=(Uint32*)((Uint8*)base->pixels+y*base->pitch+x*4);
-                            Uint8 rr,gg,bb,a;
-                            SDL_GetRGBA(*px,base->format,&rr,&gg,&bb,&a);
-                            *px=SDL_MapRGBA(base->format,c.r,c.g,c.b,a);
-                        }
-                        SDL_UnlockSurface(base);
-                    }
-                    icones_laterais[i]=SDL_CreateTextureFromSurface(renderer,base);
-                    SDL_FreeSurface(base);
-                }
+        if(icones_laterais[i]) {
+            SDL_DestroyTexture(icones_laterais[i]);
+            icones_laterais[i]=NULL;
+        }
+        if(preset==PRESET_COLORFUL) {
+            snprintf(caminho,sizeof(caminho),
+                     "ui/styles/colorful/icons/%s_icon_colorful.png",nomes_arquivos[i]);
+            icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+        } else if(preset==PRESET_DARK) {
+            snprintf(caminho,sizeof(caminho),
+                     "ui/styles/dark/icons/%s_icon_dark.png",nomes_arquivos[i]);
+            icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            if(!icones_laterais[i]) {
+                snprintf(caminho,sizeof(caminho),
+                         "ui/styles/light/icons/%s_icon_light.png",nomes_arquivos[i]);
+                icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
             }
-        } else icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
-        if(icones_laterais[i]) SDL_SetTextureBlendMode(icones_laterais[i],SDL_BLENDMODE_BLEND);
+        } else {
+            snprintf(caminho,sizeof(caminho),
+                     "ui/styles/light/icons/%s_icon_light.png",nomes_arquivos[i]);
+            icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+        }
+        if(icones_laterais[i])
+            SDL_SetTextureBlendMode(icones_laterais[i],SDL_BLENDMODE_BLEND);
     }
 }
 static int extensao_imagem(const char *nome) {
