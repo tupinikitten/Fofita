@@ -295,23 +295,47 @@ static void carregar_icones_preset(void) {
             SDL_DestroyTexture(icones_laterais[i]);
             icones_laterais[i]=NULL;
         }
+        /* Personalizacao tem duas geracoes de assets: brush (original)
+           e bucket (posterior). Preferir brush quando estiver presente. */
+        const char *nome_primario=(i==LATERAL_CUSTOMIZACAO)?"brush":nomes_arquivos[i];
+        const char *nome_reserva=(i==LATERAL_CUSTOMIZACAO)?"bucket":NULL;
         if(preset==PRESET_COLORFUL) {
             snprintf(caminho,sizeof(caminho),
-                     "ui/styles/colorful/icons/%s_icon_colorful.png",nomes_arquivos[i]);
+                     "ui/styles/colorful/icons/%s_icon_colorful.png",nome_primario);
             icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            if(!icones_laterais[i] && nome_reserva) {
+                snprintf(caminho,sizeof(caminho),
+                         "ui/styles/colorful/icons/%s_icon_colorful.png",nome_reserva);
+                icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            }
         } else if(preset==PRESET_DARK) {
             snprintf(caminho,sizeof(caminho),
-                     "ui/styles/dark/icons/%s_icon_dark.png",nomes_arquivos[i]);
+                     "ui/styles/dark/icons/%s_icon_dark.png",nome_primario);
             icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            if(!icones_laterais[i] && nome_reserva) {
+                snprintf(caminho,sizeof(caminho),
+                         "ui/styles/dark/icons/%s_icon_dark.png",nome_reserva);
+                icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            }
             if(!icones_laterais[i]) {
                 snprintf(caminho,sizeof(caminho),
-                         "ui/styles/light/icons/%s_icon_light.png",nomes_arquivos[i]);
+                         "ui/styles/light/icons/%s_icon_light.png",nome_primario);
+                icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
+            }
+            if(!icones_laterais[i] && nome_reserva) {
+                snprintf(caminho,sizeof(caminho),
+                         "ui/styles/light/icons/%s_icon_light.png",nome_reserva);
                 icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
             }
         } else {
             snprintf(caminho,sizeof(caminho),
-                     "ui/styles/light/icons/%s_icon_light.png",nomes_arquivos[i]);
+                     "ui/styles/light/icons/%s_icon_light.png",nome_primario);
             icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            if(!icones_laterais[i] && nome_reserva) {
+                snprintf(caminho,sizeof(caminho),
+                         "ui/styles/light/icons/%s_icon_light.png",nome_reserva);
+                icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            }
         }
         if(icones_laterais[i])
             SDL_SetTextureBlendMode(icones_laterais[i],SDL_BLENDMODE_BLEND);
