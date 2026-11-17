@@ -6,6 +6,13 @@
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+#include <dirent.h>
+#include <stdlib.h>
+#include <math.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #define MAX_ITENS 32
 #define MAX_OCULTOS 32
@@ -14,25 +21,25 @@
 #define DURACAO_AVISO_MS 3500
 
 /* Layout responsivo: faixa superior compacta, carrossel e area livre inferior. */
-#define ALTURA_CABECALHO 82
+#define ALTURA_CABECALHO 92
 #define ALTURA_TITULO 48
 #define AREA_ANIMACAO_FUTURA 104
-#define SLOT_W 88
+#define SLOT_W 112
 #define SLOT_H 58
-#define ICONE_MAX_W 62
-#define ICONE_MAX_H 42
+#define ICONE_MAX_W 84
+#define ICONE_MAX_H 54
 #define SETA_TAM 24
-#define SIDEBAR_RECOLHIDA 62
-#define SIDEBAR_ABERTA 154
+#define SIDEBAR_RECOLHIDA 78
+#define SIDEBAR_ABERTA 266
 #define SIDEBAR_ITEM_H 56
-#define SIDEBAR_TOPO 88
+#define SIDEBAR_TOPO 94
 #define SIDEBAR_ICON 26
 #define TOTAL_ACOES_LATERAIS 6
 
 typedef enum { FOCO_CABECALHO, FOCO_CARROSSEL, FOCO_SAIR, FOCO_SIDEBAR } Foco;
 typedef enum {
     LATERAL_CONQUISTAS, LATERAL_CONFIGURACOES, LATERAL_FILTROS,
-    LATERAL_FAVORITOS, LATERAL_APARENCIA, LATERAL_SAIR
+    LATERAL_FAVORITOS, LATERAL_CUSTOMIZACAO, LATERAL_SAIR
 } AcaoLateral;
 
 typedef struct {
@@ -57,25 +64,69 @@ static SDL_Texture *wallpaper = NULL;
 static SDL_Texture *seta_esq = NULL;
 static SDL_Texture *seta_dir = NULL;
 static SDL_Texture *icones_laterais[TOTAL_ACOES_LATERAIS] = {0};
-static const char *const caminhos_icones_laterais[TOTAL_ACOES_LATERAIS] = {
-    "ui/styles/dark/icons/trophy_icon.png",
-    "ui/styles/dark/icons/settings_icon.png",
-    "ui/styles/dark/icons/filter_icon.png",
-    "ui/styles/dark/icons/heart_icon.png",
-    "ui/styles/dark/icons/brush_icon.png",
-    "ui/styles/dark/icons/out_icon.png"
+static const char *const nomes_arquivos[TOTAL_ACOES_LATERAIS] = {
+    "trophy", "settings", "filter", "heart", "bucket", "out"
 };
+/* Light = icones escuros; Dark = claros, Colorful = cores individuais. */
+typedef enum { PRESET_LIGHT, PRESET_DARK, PRESET_COLORFUL } Preset;
+static const char *const nomes_presets[] = {"Light", "Dark", "Colorful"};
+static Preset manual_preset = PRESET_LIGHT;
+static Preset auto_preset = PRESET_LIGHT;
+static int contraste_automatico = 1;
+static char wallpaper_path[512] = "ui/wallpapers/bk-01.jpg";
+#define MAX_WALLPAPERS 64
+static char wallpapers[MAX_WALLPAPERS][512];
+static int total_wallpapers = 0;
+static int wallpaper_indice = 0;
+static int tela_aparencia = 0;
+static int opcao_aparencia = 0;
+static int tela_previa_wallpaper = 0;
+static int preview_indice = 0;
+static SDL_Texture *preview_textura = NULL;
+static char preview_custom_path[1024] = "";
+static Uint32 animacao_slot_inicio = 0;
+
 static const char *const nomes_laterais[TOTAL_ACOES_LATERAIS] = {
-    "Conquistas", "Configuracoes", "Filtros", "Favoritos", "Aparencia", "Sair"
+    "RetroAchievements", "Configurações", "Filtros", "Favoritos", "Customização", "Sair"
 };
 static int sidebar_aberta = 0;
 static int item_lateral = LATERAL_CONFIGURACOES;
 static int tela_configuracoes = 0;
 static int opcao_configuracoes = 0;
+static int total_opcoes_config = 2;
 
 static Foco foco = FOCO_CARROSSEL;
 static char aviso[128] = "";
 static Uint32 aviso_ate = 0;
+static void limpar_cache_arredondado(void);
+
+static void obter_geometria_sidebar(int vh, SDL_Rect *painel, int *lista_y, int *h_item, int *aberta) {
+    int esta_aberta = sidebar_aberta ? 1 : 0;
+    if (aberta) *aberta = esta_aberta;
+    if (esta_aberta) {
+        painel->x = 16;
+        painel->y = 18;
+        painel->w = SIDEBAR_ABERTA - 12;
+        painel->h = vh - 36;
+        if (painel->h < 360) painel->h = 360;
+        if (painel->h > vh - 12) painel->h = vh - 12;
+        /* Na referencia, os itens ocupam a regiao central e deixam
+           uma area de respiro acima do primeiro icone. */
+        int passo = painel->h / 12;
+        if (passo < 54) passo = 54;
+        if (passo > 76) passo = 76;
+        if (h_item) *h_item = passo;
+        if (lista_y) *lista_y = painel->y + (painel->h - 6 * passo) / 2 + 18;
+    } else {
+        painel->w = SIDEBAR_RECOLHIDA - 20;
+        painel->h = TOTAL_ACOES_LATERAIS * SIDEBAR_ITEM_H + 34;
+        painel->x = 16;
+        painel->y = (vh - painel->h) / 2 > 24 ? (vh - painel->h) / 2 : 24;
+        if (lista_y) *lista_y = painel->y + 14;
+        if (h_item) *h_item = SIDEBAR_ITEM_H;
+    }
+}
+
 
 /* ---------- configuracao (consoles ocultos) ---------- */
 
@@ -109,6 +160,14 @@ static void carregar_config(void) {
         linha[strcspn(linha, "\r\n")] = '\0';
         if (strncmp(linha, "oculto=", 7) == 0 && linha[7] != '\0')
             definir_oculto(linha + 7, 1);
+        else if (strncmp(linha, "wallpaper=", 10)==0 && linha[10])
+            snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",linha+10);
+        else if (strncmp(linha,"icon_auto=",10)==0)
+            contraste_automatico = atoi(linha+10)!=0;
+        else if (strncmp(linha,"icon_manual=",12)==0) {
+            int v=atoi(linha+12);
+            if(v>=0 && v<=2) manual_preset=(Preset)v;
+        }
     }
 
     fclose(f);
@@ -120,6 +179,8 @@ static void salvar_config(void) {
 
     for (int i = 0; i < total_ocultos; ++i)
         fprintf(f, "oculto=%s\n", ocultos[i]);
+    fprintf(f,"wallpaper=%s\nicon_auto=%d\nicon_manual=%d\n",
+            wallpaper_path,contraste_automatico,(int)manual_preset);
 
     fclose(f);
 }
@@ -194,6 +255,106 @@ static SDL_Texture *carregar_textura(const char *caminho, int *w, int *h) {
     return tex;
 }
 
+/* Os presets compartilham a mesma logica e os mesmos nomes-base. */
+static Preset preset_ativo(void) { return contraste_automatico ? auto_preset : manual_preset; }
+static SDL_Color icone_cor(int indice) {
+    static const SDL_Color cores[6]={{244,192,89,255},{123,176,249,255},
+        {104,215,189,255},{248,128,157,255},{192,144,246,255},{248,168,116,255}};
+    Preset p=preset_ativo();
+    if(p==PRESET_COLORFUL) return cores[indice];
+    return p==PRESET_DARK ? (SDL_Color){248,249,255,255} : (SDL_Color){33,45,66,255};
+}
+static void carregar_icones_preset(void) {
+    char caminho[256];
+    const char *pastas[]={"light","light","colorful"};
+    /* Assets escuros existem em light; assets claros: o atlas dark esta incompleto,
+       entao tingimos o icone-base via SDL_SetTextureColorMod quando necessario. */
+    const char *pasta=preset_ativo()==PRESET_COLORFUL ? pastas[2] : pastas[0];
+    const char *sufixo=preset_ativo()==PRESET_COLORFUL ? "colorful" : "light";
+    for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
+        if(icones_laterais[i]) SDL_DestroyTexture(icones_laterais[i]);
+        snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",
+                 pasta,nomes_arquivos[i],sufixo);
+        if(preset_ativo()!=PRESET_COLORFUL) {
+            SDL_Surface *orig=IMG_Load(caminho);
+            if(orig) {
+                SDL_Surface *base=SDL_ConvertSurfaceFormat(orig,SDL_PIXELFORMAT_RGBA32,0);
+                SDL_FreeSurface(orig);
+                if(base) {
+                    SDL_Color c=icone_cor(i);
+                    if(SDL_LockSurface(base)==0) {
+                        for(int y=0;y<base->h;++y) for(int x=0;x<base->w;++x) {
+                            Uint32 *px=(Uint32*)((Uint8*)base->pixels+y*base->pitch+x*4);
+                            Uint8 rr,gg,bb,a;
+                            SDL_GetRGBA(*px,base->format,&rr,&gg,&bb,&a);
+                            *px=SDL_MapRGBA(base->format,c.r,c.g,c.b,a);
+                        }
+                        SDL_UnlockSurface(base);
+                    }
+                    icones_laterais[i]=SDL_CreateTextureFromSurface(renderer,base);
+                    SDL_FreeSurface(base);
+                }
+            }
+        } else icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+        if(icones_laterais[i]) SDL_SetTextureBlendMode(icones_laterais[i],SDL_BLENDMODE_BLEND);
+    }
+}
+static int extensao_imagem(const char *nome) {
+    const char *p=strrchr(nome,'.');
+    return p && (!SDL_strcasecmp(p,".jpg") || !SDL_strcasecmp(p,".jpeg") || !SDL_strcasecmp(p,".png"));
+}
+static void listar_wallpapers(void) {
+    total_wallpapers=0;
+    DIR *d=opendir("ui/wallpapers");
+    if(d) {
+        struct dirent *e;
+        while((e=readdir(d))!=NULL && total_wallpapers<MAX_WALLPAPERS) {
+            if(!extensao_imagem(e->d_name)) continue;
+            snprintf(wallpapers[total_wallpapers++],512,"ui/wallpapers/%s",e->d_name);
+        }
+        closedir(d);
+    }
+    wallpaper_indice=0;
+    for(int i=0;i<total_wallpapers;++i)
+        if(strcmp(wallpaper_path,wallpapers[i])==0) wallpaper_indice=i;
+}
+static void avaliar_contraste_wallpaper(void) {
+    SDL_Surface *s=IMG_Load(wallpaper_path);
+    if(!s) { auto_preset=PRESET_DARK; return; }
+    SDL_Surface *rgba=SDL_ConvertSurfaceFormat(s,SDL_PIXELFORMAT_RGBA32,0);
+    SDL_FreeSurface(s);
+    if(!rgba) { auto_preset=PRESET_DARK; return; }
+    int w=rgba->w,h=rgba->h; double soma=0; int n=0;
+    if(SDL_LockSurface(rgba)==0) {
+        /* A amostra prioriza os 20% esquerdos, atras da pilula. */
+        int lim=w/5; if(lim<1) lim=1;
+        for(int y=h/8;y<h*7/8;y+=8) for(int x=0;x<lim;x+=8) {
+            Uint8 *pix=(Uint8*)rgba->pixels+y*rgba->pitch+x*4;
+            Uint8 r,g,b,a;
+            Uint32 px; memcpy(&px,pix,4);
+            SDL_GetRGBA(px,rgba->format,&r,&g,&b,&a);
+            soma+=0.2126*r+0.7152*g+0.0722*b;
+            ++n;
+        }
+        SDL_UnlockSurface(rgba);
+    }
+    SDL_FreeSurface(rgba);
+    if(!n) {auto_preset=PRESET_DARK;return;}
+    double lum=soma/n;
+    /* Histerese evita oscilacao em fundos proximo do limiar. */
+    if(lum>155) auto_preset=PRESET_LIGHT;
+    else if(lum<122) auto_preset=PRESET_DARK;
+}
+static void atualizar_wallpaper(const char *caminho,int persistir) {
+    SDL_Texture *novo=IMG_LoadTexture(renderer,caminho);
+    if(!novo) {ui_menu_aviso("Nao foi possivel abrir a imagem");return;}
+    if(wallpaper) SDL_DestroyTexture(wallpaper);
+    wallpaper=novo;
+    if(caminho!=wallpaper_path) snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",caminho);
+    avaliar_contraste_wallpaper();
+    carregar_icones_preset();
+    if(persistir) salvar_config();
+}
 int ui_menu_init(void) {
     const UiTema *tema = ui_tema_atual();
     char caminho[512];
@@ -203,15 +364,17 @@ int ui_menu_init(void) {
         return 0;
     }
 
-    wallpaper = carregar_textura(tema->wallpaper, NULL, NULL);
+    carregar_config();
+    listar_wallpapers();
+    atualizar_wallpaper(wallpaper_path,0);
+    (void)tema;
 
     snprintf(caminho, sizeof(caminho), "%s/arrows/left_arrow.png", tema->pasta_estilo);
     seta_esq = carregar_textura(caminho, NULL, NULL);
     snprintf(caminho, sizeof(caminho), "%s/arrows/right_arrow.png", tema->pasta_estilo);
     seta_dir = carregar_textura(caminho, NULL, NULL);
 
-    for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i)
-        icones_laterais[i] = carregar_textura(caminhos_icones_laterais[i], NULL, NULL);
+
 
     size_t quantidade = 0;
     const ConsoleConfig *todos = console_registry_get_all(&quantidade);
@@ -227,7 +390,6 @@ int ui_menu_init(void) {
             item->icone = carregar_textura(todos[i].caminho_icone, &item->icone_w, &item->icone_h);
     }
 
-    carregar_config();
     reconstruir_visiveis(NULL);
     aplicar_selecao();
     foco = FOCO_CARROSSEL;
@@ -246,8 +408,11 @@ void ui_menu_fechar(void) {
     for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i)
         if (icones_laterais[i]) SDL_DestroyTexture(icones_laterais[i]);
 
+    if(preview_textura) SDL_DestroyTexture(preview_textura);
+    preview_textura=NULL;
     wallpaper = seta_esq = seta_dir = NULL;
     total_itens = total_visiveis = sel = 0;
+    limpar_cache_arredondado();
     ui_texto_fechar();
 }
 
@@ -271,16 +436,54 @@ static int tecla_confirmar(SDL_Keycode t) {
 }
 
 MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
+    if (tela_previa_wallpaper) {
+        if(tecla==SDLK_ESCAPE) { tela_previa_wallpaper=0; preview_custom_path[0]='\0'; }
+        else if((tecla==SDLK_LEFT || tecla==SDLK_RIGHT) && !preview_custom_path[0]) {
+            if(total_wallpapers) {
+                preview_indice=(preview_indice+(tecla==SDLK_RIGHT?1:-1)+total_wallpapers)%total_wallpapers;
+                if(preview_textura) SDL_DestroyTexture(preview_textura);
+                preview_textura=IMG_LoadTexture(renderer,wallpapers[preview_indice]);
+            }
+        } else if(tecla_confirmar(tecla)) {
+            if(preview_custom_path[0]) atualizar_wallpaper(preview_custom_path,1);
+            else if(total_wallpapers) {
+                atualizar_wallpaper(wallpapers[preview_indice],1);
+                wallpaper_indice=preview_indice;
+            }
+            tela_previa_wallpaper=0; preview_custom_path[0]='\0';
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+    if (tela_aparencia) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
+        else if(tecla==SDLK_UP) opcao_aparencia=(opcao_aparencia+4)%5;
+        else if(tecla==SDLK_DOWN) opcao_aparencia=(opcao_aparencia+1)%5;
+        else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_aparencia==0) contraste_automatico=!contraste_automatico;
+            if(opcao_aparencia==1) {contraste_automatico=0; manual_preset=(Preset)((manual_preset+1)%3);}
+            if(opcao_aparencia==2) {
+                listar_wallpapers(); preview_indice=wallpaper_indice;
+                preview_custom_path[0]='\0';
+                if(preview_textura) SDL_DestroyTexture(preview_textura);
+                preview_textura=total_wallpapers?IMG_LoadTexture(renderer,wallpapers[preview_indice]):NULL;
+                if(total_wallpapers) tela_previa_wallpaper=1;
+                else ui_menu_aviso("Nenhum wallpaper disponivel");
+            }
+            if(opcao_aparencia==3) atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1);
+            if(opcao_aparencia==4) tela_aparencia=0;
+            carregar_icones_preset(); salvar_config();
+        }
+        return MENU_ACAO_NENHUMA;
+    }
     if (tela_configuracoes) {
-        if (tecla == SDLK_UP || tecla == SDLK_DOWN)
-            opcao_configuracoes = 1 - opcao_configuracoes;
-        else if (tecla == SDLK_ESCAPE || (tecla == SDLK_LEFT && opcao_configuracoes == 1))
-            tela_configuracoes = 0;
-        else if (tecla_confirmar(tecla)) {
-            if (opcao_configuracoes == 0) {
-                mostrar_todos_consoles();
-            } else {
-                tela_configuracoes = 0;
+        if(tecla==SDLK_LEFT) { tela_configuracoes=0; return MENU_ACAO_NENHUMA; }
+        if(tecla==SDLK_UP) opcao_configuracoes=(opcao_configuracoes+total_opcoes_config-1)%total_opcoes_config;
+        else if(tecla==SDLK_DOWN) opcao_configuracoes=(opcao_configuracoes+1)%total_opcoes_config;
+        else if(tecla==SDLK_ESCAPE) tela_configuracoes=0;
+        else if(tecla_confirmar(tecla)) {
+            switch(opcao_configuracoes) {
+            case 0: mostrar_todos_consoles(); break;
+            case 1: tela_configuracoes=0; break;
             }
         }
         return MENU_ACAO_NENHUMA;
@@ -309,8 +512,8 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 tela_configuracoes = 1;
                 opcao_configuracoes = 0;
                 break;
-            case LATERAL_APARENCIA:
-                ui_menu_aviso("Personalizacao: em desenvolvimento");
+            case LATERAL_CUSTOMIZACAO:
+                tela_aparencia=1; opcao_aparencia=0;
                 break;
             case LATERAL_CONQUISTAS:
                 ui_menu_aviso("RetroAchievements: em desenvolvimento");
@@ -361,6 +564,96 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     return MENU_ACAO_NENHUMA;
 }
 
+/* Clique em qualquer cartucho lateral move o mesmo indice do titulo. */
+MenuAcao ui_menu_clique(int mx,int my) {
+    int vw=0,vh=0;
+    obter_tamanho_ui(&vw,&vh);
+    if(vw<=0 || vh<=0) return MENU_ACAO_NENHUMA;
+    if(tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
+    if(tela_aparencia || tela_configuracoes) {
+        int custom=tela_aparencia;
+        int n=custom?5:2;
+        int pw=custom?360:340;
+        if(pw>vw-42) pw=vw-42;
+        int ph=custom?330:178;
+        if(ph>vh-46) ph=vh-46;
+        int x=sidebar_aberta?SIDEBAR_ABERTA+20:SIDEBAR_RECOLHIDA+20;
+        if(x+pw>vw-16) x=vw-pw-16;
+        int y=(vh-ph)/2;
+        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*(custom?48:45)) {
+            int item=(my-y-59)/(custom?48:45);
+            if(custom) opcao_aparencia=item;
+            else opcao_configuracoes=item;
+            return ui_menu_tecla(SDLK_RETURN,0);
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+    SDL_Rect painel_sidebar; int lista_y=0, h_item_sidebar=0, aberta_sidebar=0;
+    obter_geometria_sidebar(vh,&painel_sidebar,&lista_y,&h_item_sidebar,&aberta_sidebar);
+    if(mx>=painel_sidebar.x && mx<painel_sidebar.x+painel_sidebar.w && my>=painel_sidebar.y && my<painel_sidebar.y+painel_sidebar.h) {
+        if(aberta_sidebar) {
+            SDL_Rect bt={painel_sidebar.x+16,painel_sidebar.y+14,40,40};
+            if(mx>=bt.x && mx<bt.x+bt.w && my>=bt.y && my<bt.y+bt.h) {
+                sidebar_aberta=0;
+                foco=FOCO_CARROSSEL;
+                return MENU_ACAO_NENHUMA;
+            }
+        }
+        for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
+            int y=lista_y+i*h_item_sidebar;
+            if(i==LATERAL_SAIR && my>=y-10 && my<y) return MENU_ACAO_NENHUMA;
+            if(my>=y && my<y+h_item_sidebar-7) {
+                item_lateral=i;
+                foco=FOCO_SIDEBAR;
+                sidebar_aberta=1;
+                return ui_menu_tecla(SDLK_RETURN,0);
+            }
+        }
+        if(!aberta_sidebar) {
+            foco=FOCO_SIDEBAR;
+            sidebar_aberta=1;
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+    SDL_Rect faixa={SIDEBAR_RECOLHIDA,ALTURA_CABECALHO,vw-SIDEBAR_RECOLHIDA,
+        vh-ALTURA_CABECALHO-ALTURA_TITULO-AREA_ANIMACAO_FUTURA};
+    if(mx<faixa.x || mx>faixa.x+faixa.w || my<faixa.y || my>faixa.y+faixa.h+ALTURA_TITULO)
+        return MENU_ACAO_NENHUMA;
+    if(!carousel_total_visiveis()) return MENU_ACAO_NENHUMA;
+    int cx=faixa.x+faixa.w/2;
+    int cy=faixa.y+(int)(faixa.h*0.47f);
+    int cart=(int)(faixa.h*0.62f);
+    if(cart>(int)(faixa.w*0.30f)) cart=(int)(faixa.w*0.30f);
+    if(cart>340) cart=340;
+    if(cart<64) cart=64;
+    int zona=cart*46/100;
+    foco=FOCO_CARROSSEL;
+    if(mx<cx-zona) mover_carousel_esquerda();
+    else if(mx>cx+zona) mover_carousel_direita();
+    else if(my>=cy-cart/2 && my<cy+cart/2) return MENU_ACAO_INICIAR_JOGO;
+    return MENU_ACAO_NENHUMA;
+}
+void ui_menu_rolagem(int direcao) {
+    if(tela_previa_wallpaper || tela_aparencia || tela_configuracoes || !direcao) return;
+    foco=FOCO_CARROSSEL;
+    if(direcao>0) mover_carousel_esquerda();
+    else mover_carousel_direita();
+}
+
+void ui_menu_animar_slot(void) { animacao_slot_inicio=SDL_GetTicks(); }
+
+/* Arrastar uma imagem para a janela abre a previa, sem modificar preferencias ate confirmar. */
+void ui_menu_wallpaper_solto(const char *caminho) {
+    if(!caminho || !*caminho || !extensao_imagem(caminho)) {
+        ui_menu_aviso("Solte um arquivo PNG ou JPG"); return;
+    }
+    SDL_Texture *tex=IMG_LoadTexture(renderer,caminho);
+    if(!tex) {ui_menu_aviso("Imagem invalida");return;}
+    if(preview_textura) SDL_DestroyTexture(preview_textura);
+    preview_textura=tex;
+    snprintf(preview_custom_path,sizeof(preview_custom_path),"%s",caminho);
+    tela_previa_wallpaper=1;
+}
 /* ---------- desenho ---------- */
 
 static void preencher(SDL_Rect r, SDL_Color c) {
@@ -376,6 +669,160 @@ static void contorno(SDL_Rect r, int espessura, SDL_Color c) {
     preencher((SDL_Rect){ r.x + r.w - espessura, r.y + espessura, espessura, r.h - 2 * espessura }, c);
 }
 
+/* Bordas suaves reais: cobertura subpixel da curva numa textura RGBA.
+   Cache de geometrias evita reconstruir os paineis a cada frame. */
+#define LIMITE_CACHE_ARREDONDADO 96
+typedef struct {
+    int w, h, raio, borda;
+    SDL_Color cor;
+    SDL_Texture *tex;
+} EntradaArredondado;
+static EntradaArredondado cache_arredondados[LIMITE_CACHE_ARREDONDADO];
+static int total_cache_arredondado=0;
+static int proximo_cache_arredondado=0;
+
+static float limite01(float n) {
+    return n<0.0f?0.0f:(n>1.0f?1.0f:n);
+}
+static float cobertura_arredondada(float px,float py,int largura,int altura,int raio) {
+    float mx=largura*0.5f, my=altura*0.5f;
+    float dx=fabsf(px-mx)-(mx-raio);
+    float dy=fabsf(py-my)-(my-raio);
+    float dx_externo=dx>0.0f?dx:0.0f;
+    float dy_externo=dy>0.0f?dy:0.0f;
+    float externo=sqrtf(dx_externo*dx_externo+dy_externo*dy_externo);
+    float interno=fminf(fmaxf(dx,dy),0.0f);
+    float distancia=externo+interno-raio;
+    return limite01(0.5f-distancia);
+}
+static void limpar_cache_arredondado(void) {
+    for(int i=0;i<total_cache_arredondado;++i) {
+        if(cache_arredondados[i].tex) SDL_DestroyTexture(cache_arredondados[i].tex);
+        cache_arredondados[i].tex=NULL;
+    }
+    total_cache_arredondado=proximo_cache_arredondado=0;
+}
+static SDL_Texture *textura_arredondada(int w,int h,int raio,SDL_Color cor,int borda) {
+    for(int i=0;i<total_cache_arredondado;++i) {
+        EntradaArredondado *e=&cache_arredondados[i];
+        if(e->w==w && e->h==h && e->raio==raio && e->borda==borda &&
+           memcmp(&e->cor,&cor,sizeof(cor))==0) return e->tex;
+    }
+    SDL_Surface *superficie=SDL_CreateRGBSurfaceWithFormat(0,w,h,32,SDL_PIXELFORMAT_RGBA32);
+    if(!superficie) return NULL;
+    if(SDL_LockSurface(superficie)!=0) {SDL_FreeSurface(superficie);return NULL;}
+    int interno_w=w-2*borda, interno_h=h-2*borda;
+    int interno_raio=raio-borda;
+    if(interno_raio<0) interno_raio=0;
+    for(int y=0;y<h;++y) {
+        Uint32 *linha=(Uint32*)((Uint8*)superficie->pixels+y*superficie->pitch);
+        for(int x=0;x<w;++x) {
+            float px=x+0.5f, py=y+0.5f;
+            float cobertura=cobertura_arredondada(px,py,w,h,raio);
+            if(borda>0 && interno_w>0 && interno_h>0) {
+                float interior=cobertura_arredondada(px-borda,py-borda,interno_w,interno_h,interno_raio);
+                cobertura=limite01(cobertura-interior);
+            }
+            Uint8 alpha=(Uint8)(cor.a*cobertura+0.5f);
+            linha[x]=SDL_MapRGBA(superficie->format,cor.r,cor.g,cor.b,alpha);
+        }
+    }
+    SDL_UnlockSurface(superficie);
+    SDL_Texture *tex=SDL_CreateTextureFromSurface(renderer,superficie);
+    SDL_FreeSurface(superficie);
+    if(!tex) return NULL;
+    SDL_SetTextureBlendMode(tex,SDL_BLENDMODE_BLEND);
+    int indice;
+    if(total_cache_arredondado<LIMITE_CACHE_ARREDONDADO) indice=total_cache_arredondado++;
+    else {
+        indice=proximo_cache_arredondado++%LIMITE_CACHE_ARREDONDADO;
+        SDL_DestroyTexture(cache_arredondados[indice].tex);
+    }
+    cache_arredondados[indice]=(EntradaArredondado){w,h,raio,borda,cor,tex};
+    return tex;
+}
+static void arredondado(SDL_Rect a,int raio,SDL_Color cor,int borda) {
+    if(a.w<=0 || a.h<=0) return;
+    if(raio>a.w/2) raio=a.w/2;
+    if(raio>a.h/2) raio=a.h/2;
+    if(raio<0) raio=0;
+    if(borda<0) borda=0;
+    SDL_Texture *tex=textura_arredondada(a.w,a.h,raio,cor,borda);
+    if(tex) SDL_RenderCopy(renderer,tex,NULL,&a);
+}
+static void desenhar_capsula(SDL_Rect r,SDL_Color fundo,SDL_Color borda) {
+    arredondado(r,r.h/2,fundo,0);
+    arredondado(r,r.h/2,borda,1);
+}
+static void desenhar_relogio(int vw) {
+    time_t agora=time(NULL); struct tm *tm=localtime(&agora);
+    if(!tm) return;
+    char horario[32]; strftime(horario,sizeof(horario),"%H:%M",tm);
+    int pct=-1;
+#ifdef _WIN32
+    SYSTEM_POWER_STATUS energia;
+    if(GetSystemPowerStatus(&energia) && energia.BatteryLifePercent!=255)
+        pct=(int)energia.BatteryLifePercent;
+#endif
+    SDL_Rect area={vw-(pct>=0?192:128),14,pct>=0?176:112,39};
+    int claro=preset_ativo()!=PRESET_DARK;
+    SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){246,247,255,255};
+    desenhar_capsula(area,claro?(SDL_Color){232,245,255,193}:(SDL_Color){22,34,75,191},
+                     claro?(SDL_Color){255,255,255,200}:(SDL_Color){192,213,251,98});
+    ui_texto_desenhar(horario,area.x+17,area.y+9,1,tinta,(SDL_Color){0,0,0,0});
+    if(pct>=0) {
+        SDL_Rect corpo={area.x+90,area.y+13,26,13};
+        arredondado(corpo,3,(SDL_Color){245,248,250,230},1);
+        preencher((SDL_Rect){corpo.x+26,corpo.y+4,2,5},(SDL_Color){255,255,255,215});
+        preencher((SDL_Rect){corpo.x+2,corpo.y+2,22*pct/100,9},(SDL_Color){160,229,197,240});
+        char valor[16]; snprintf(valor,sizeof(valor),"%d%%",pct);
+        ui_texto_desenhar(valor,area.x+126,area.y+9,1,tinta,(SDL_Color){0,0,0,0});
+    }
+}
+
+static void desenhar_slot(int cx,int y) {
+    SDL_Color borda=icone_cor(LATERAL_CONFIGURACOES);
+    SDL_Rect base={cx-92,y,184,42};
+    desenhar_capsula(base,(SDL_Color){25,34,49,140},(SDL_Color){255,255,255,95});
+    SDL_Rect abertura={cx-68,y+13,136,14};
+    desenhar_capsula(abertura,(SDL_Color){8,14,28,195},(SDL_Color){220,231,244,78});
+    SDL_Rect brilho={cx-48,y+18,96,3};
+    preencher(brilho,(SDL_Color){borda.r,borda.g,borda.b,145});
+    Uint32 dt=SDL_GetTicks()-animacao_slot_inicio;
+    if(animacao_slot_inicio && dt<380) {
+        /* Cartucho esquematico descendo em direcao ao slot antes de abrir a ROM. */
+        int desloc=(int)(dt*24/380);
+        SDL_Rect cartucho={cx-23,y-26+desloc,46,26};
+        arredondado(cartucho,5,(SDL_Color){borda.r,borda.g,borda.b,235},0);
+        arredondado(cartucho,5,(SDL_Color){255,255,255,215},1);
+    }
+}
+static int controle_conectado=0;
+void ui_menu_controle_conectado(int sim) { controle_conectado=sim; }
+static void desenhar_atalhos(int vw,int vh) {
+    const int claro=preset_ativo()!=PRESET_DARK;
+    const char *letras_teclado[]={"X","TAB","ESC"};
+    const char *letras_controle[]={"A","START","B"};
+    const char *acoes[]={"Jogar","Menu","Voltar"};
+    const char *const *letras=controle_conectado?letras_controle:letras_teclado;
+    SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){245,247,255,255};
+    SDL_Color bolhas[3]={{214,89,148,255},{182,99,193,255},{221,92,124,255}};
+    int x=vw-320,y=vh-41;
+    for(int i=0;i<3;++i) {
+        SDL_Rect c={x,y,100,30};
+        desenhar_capsula(c,claro?(SDL_Color){235,245,253,214}:(SDL_Color){23,34,74,200},
+                         claro?(SDL_Color){255,255,255,205}:(SDL_Color){202,218,255,100});
+        SDL_Rect bolha={x+4,y+4,22,22};
+        SDL_Color cor_bolha=preset_ativo()==PRESET_COLORFUL?bolhas[i]:tinta;
+        desenhar_capsula(bolha,cor_bolha,cor_bolha);
+        ui_texto_desenhar_centro(letras[i],bolha.x+11,bolha.y+4,1,
+                              (SDL_Color){255,255,255,255},
+                              (SDL_Color){0,0,0,0});
+        ui_texto_desenhar(acoes[i],x+30,y+7,1,tinta,(SDL_Color){0,0,0,0});
+        x+=105;
+    }
+}
+
 /* Papel de parede em modo "cobrir": preenche a janela cortando o excesso, sem deformar. */
 static void desenhar_fundo(int vw, int vh) {
     const UiTema *tema = ui_tema_atual();
@@ -389,7 +836,7 @@ static void desenhar_fundo(int vw, int vh) {
     SDL_QueryTexture(wallpaper, NULL, NULL, &tw, &th);
 
     if (tw <= 0 || th <= 0) {
-        SDL_RenderCopy(renderer, wallpaper, NULL, NULL);
+        SDL_RenderCopy(renderer, wallpaper, NULL, &(SDL_Rect){0,0,vw,vh});
         return;
     }
 
@@ -404,7 +851,7 @@ static void desenhar_fundo(int vw, int vh) {
     origem.x = (tw - origem.w) / 2;
     origem.y = (th - origem.h) / 2;
 
-    SDL_RenderCopy(renderer, wallpaper, &origem, NULL);
+    SDL_RenderCopy(renderer, wallpaper, &origem, &(SDL_Rect){0,0,vw,vh});
 }
 
 /* Desenha 'tex' (w x h) encaixada e centralizada em 'caixa', sem deformar. */
@@ -457,8 +904,8 @@ static void desenhar_cabecalho(int x_area, int largura_area) {
         int selecionado = (pos == sel);
         SDL_Rect slot = { x0 + k * SLOT_W + 4, y0, SLOT_W - 8, SLOT_H };
 
-        int icone_w = selecionado ? ICONE_MAX_W : ICONE_MAX_W - 10;
-        int icone_h = selecionado ? ICONE_MAX_H : ICONE_MAX_H - 6;
+        int icone_w = selecionado ? ICONE_MAX_W : ICONE_MAX_W - 16;
+        int icone_h = selecionado ? ICONE_MAX_H : ICONE_MAX_H - 10;
         SDL_Rect caixa_icone = { slot.x + (slot.w - icone_w) / 2,
                                  slot.y + (slot.h - icone_h) / 2,
                                  icone_w, icone_h };
@@ -476,11 +923,16 @@ static void desenhar_cabecalho(int x_area, int largura_area) {
                                      slot.y + (slot.h - ui_texto_altura(2)) / 2, 2,
                                      tema->texto, tema->texto_sombra);
         }
-    }
 
-    char nome[96];
-    ui_texto_ajustar(console_selecionado()->nome, vw - 40, 2, nome, sizeof(nome));
-    ui_texto_desenhar_centro(nome, x_area + vw / 2, y0 + SLOT_H + 2, 2, tema->texto, tema->texto_sombra);
+        /* Nome curto (id em maiusculas) embaixo de cada icone; o selecionado ganha destaque. */
+        char rotulo[TAM_ID];
+        snprintf(rotulo, sizeof(rotulo), "%s", item->cfg->id);
+        for (char *c = rotulo; *c; ++c)
+            if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
+        ui_texto_desenhar_centro(rotulo, slot.x + slot.w / 2, y0 + SLOT_H + 4, 2,
+                                 selecionado ? tema->texto : tema->texto_suave,
+                                 selecionado ? tema->texto_sombra : (SDL_Color){ 0, 0, 0, 0 });
+    }
 }
 
 static void desenhar_linha_titulo(int x_area, int vw, int y) {
@@ -488,22 +940,18 @@ static void desenhar_linha_titulo(int x_area, int vw, int y) {
 
     if (carousel_total_visiveis() == 0) return;
 
-    char bruto[256], nome[256], contador[32];
+    char bruto[256], nome[256];
     carousel_nome_jogo_atual(bruto, sizeof(bruto));
 
     int max_texto = vw - 2 * (SETA_TAM + 36);
     ui_texto_ajustar(bruto, max_texto, 2, nome, sizeof(nome));
-    ui_texto_desenhar_centro(nome, x_area + vw / 2, y + 2, 2, tema->texto, tema->texto_sombra);
-
-    snprintf(contador, sizeof(contador), "%zu / %zu",
-             carousel_posicao_atual() + 1, carousel_total_visiveis());
-    ui_texto_desenhar_centro(contador, x_area + vw / 2, y + 24, 2, tema->texto_suave, tema->texto_sombra);
+    ui_texto_desenhar_centro(nome, x_area + vw / 2, y - 15, 2, tema->texto, tema->texto_sombra);
 
     if (carousel_total_visiveis() > 1) {
         int meio = ui_texto_largura(nome, 2) / 2;
         Uint8 alfa = foco == FOCO_CARROSSEL ? 255 : 130;
-        SDL_Rect esq = { x_area + vw / 2 - meio - 16 - SETA_TAM, y + 8, SETA_TAM, SETA_TAM };
-        SDL_Rect dir = { x_area + vw / 2 + meio + 16, y + 8, SETA_TAM, SETA_TAM };
+        SDL_Rect esq = { x_area + vw / 2 - meio - 16 - SETA_TAM, y - 10, SETA_TAM, SETA_TAM };
+        SDL_Rect dir = { x_area + vw / 2 + meio + 16, y - 10, SETA_TAM, SETA_TAM };
 
         desenhar_encaixado(seta_esq, 512, 512, esq, alfa);
         desenhar_encaixado(seta_dir, 512, 512, dir, alfa);
@@ -511,55 +959,68 @@ static void desenhar_linha_titulo(int x_area, int vw, int y) {
 }
 
 static void desenhar_sidebar(int vh) {
-    const UiTema *tema = ui_tema_atual();
-    int largura = sidebar_aberta ? SIDEBAR_ABERTA : SIDEBAR_RECOLHIDA;
-    SDL_Rect fundo = { 0, 0, largura, vh };
-    preencher(fundo, (SDL_Color){ 28, 34, 46, 142 });
-    preencher((SDL_Rect){ largura - 1, 0, 1, vh }, (SDL_Color){ 255, 255, 255, 70 });
+    const Preset preset=preset_ativo();
+    const int claro=preset!=PRESET_DARK;
+    const SDL_Color texto=claro?(SDL_Color){32,45,68,255}:(SDL_Color){245,248,255,255};
+    SDL_Rect painel; int lista_y=0, h_item=0, aberta=0;
+    obter_geometria_sidebar(vh,&painel,&lista_y,&h_item,&aberta);
 
-    for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i) {
-        int y = SIDEBAR_TOPO + i * SIDEBAR_ITEM_H;
-        SDL_Rect item = { 6, y, largura - 12, SIDEBAR_ITEM_H - 5 };
-        int ativo = (foco == FOCO_SIDEBAR && item_lateral == i);
-        if (ativo) preencher(item, (SDL_Color){ tema->destaque.r, tema->destaque.g, tema->destaque.b, 150 });
-        else if (i == LATERAL_SAIR) {
-            /* Separacao visual para a acao de encerrar. */
-            preencher((SDL_Rect){ 12, y - 8, largura - 24, 1 }, (SDL_Color){ 255,255,255,70 });
-        }
-
-        if (icones_laterais[i]) {
-            SDL_Rect caixa = { 18, y + (SIDEBAR_ITEM_H - SIDEBAR_ICON - 5) / 2,
-                               SIDEBAR_ICON, SIDEBAR_ICON };
-            desenhar_encaixado(icones_laterais[i], SIDEBAR_ICON, SIDEBAR_ICON,
-                               caixa, ativo ? 255 : 210);
-        }
-        if (sidebar_aberta) {
-            SDL_Color cor = ativo ? (SDL_Color){255,255,255,255} : tema->texto;
-            ui_texto_desenhar(nomes_laterais[i], 58, y + 20, 1, cor,
-                              ativo ? (SDL_Color){0,0,0,0} : tema->texto_sombra);
-        }
+    arredondado((SDL_Rect){painel.x+2,painel.y+4,painel.w,painel.h},aberta?28:painel.w/2,
+                (SDL_Color){10,20,40,26},0);
+    if(aberta) {
+        arredondado(painel,28,claro?(SDL_Color){213,233,248,188}:(SDL_Color){16,31,70,188},0);
+        arredondado(painel,28,claro?(SDL_Color){252,253,255,210}:(SDL_Color){191,207,242,88},1);
+        SDL_Rect botao={painel.x+16,painel.y+14,40,40};
+        arredondado(botao,20,(SDL_Color){255,255,255,36},0);
+        arredondado(botao,20,(SDL_Color){texto.r,texto.g,texto.b,225},1);
+        ui_texto_desenhar_centro("^",botao.x+botao.w/2,botao.y+9,1,texto,(SDL_Color){0,0,0,0});
+    } else {
+        desenhar_capsula(painel,claro?(SDL_Color){222,239,251,172}:(SDL_Color){14,28,65,178},
+                         claro?(SDL_Color){250,252,255,215}:(SDL_Color){191,207,242,88});
     }
 
-    /* Indicador discreto de que Tab expande/recolhe a barra. */
-    const char *dica = sidebar_aberta ? "TAB <" : "TAB >";
-    ui_texto_desenhar_centro(dica, largura / 2, vh - 24, 1,
-                             tema->texto_suave, (SDL_Color){0,0,0,0});
+    for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
+        int y=lista_y+i*h_item;
+        SDL_Rect item=aberta
+            ? (SDL_Rect){painel.x+11,y,painel.w-22,h_item-7}
+            : (SDL_Rect){painel.x+7,y,painel.w-14,SIDEBAR_ITEM_H-5};
+        int ativo=item_lateral==i;
+        int em_foco=foco==FOCO_SIDEBAR && ativo;
+        SDL_Color cor=icone_cor(i);
+        if(i==LATERAL_SAIR)
+            preencher((SDL_Rect){painel.x+18,y-9,painel.w-36,1},
+                     claro?(SDL_Color){35,65,95,85}:(SDL_Color){225,235,255,95});
+        if(ativo) {
+            arredondado(item,aberta?18:17,(SDL_Color){255,255,255,em_foco?34:20},0);
+            arredondado(item,aberta?18:17,(SDL_Color){cor.r,cor.g,cor.b,em_foco?245:215},2);
+        }
+        if(icones_laterais[i]) {
+            SDL_Rect caixa=aberta
+                ? (SDL_Rect){item.x+12,item.y+(item.h-28)/2,28,28}
+                : (SDL_Rect){item.x+(item.w-SIDEBAR_ICON)/2,item.y+7,SIDEBAR_ICON,SIDEBAR_ICON};
+            int tw=0,th=0; SDL_QueryTexture(icones_laterais[i],NULL,NULL,&tw,&th);
+            desenhar_encaixado(icones_laterais[i],tw,th,caixa,ativo?255:238);
+        }
+        if(aberta) ui_texto_desenhar(nomes_laterais[i],item.x+50,
+                      item.y+(item.h-ui_texto_altura(1))/2,1,texto,(SDL_Color){0,0,0,0});
+    }
 }
 
 void ui_menu_desenhar(void) {
     const UiTema *tema = ui_tema_atual();
     int vw = 800, vh = 600;
 
-    SDL_GetRendererOutputSize(renderer, &vw, &vh);
+    obter_tamanho_ui(&vw, &vh);
     if (vw <= 0) vw = 800;
     if (vh <= 0) vh = 600;
 
     desenhar_fundo(vw, vh);
     desenhar_sidebar(vh);
+    desenhar_relogio(vw);
 
-    int sidebar_w = sidebar_aberta ? SIDEBAR_ABERTA : SIDEBAR_RECOLHIDA;
-    int x_area = sidebar_w;
-    int largura_area = vw - sidebar_w;
+    /* Nunca recalcular as posicoes do carrossel ao expandir a lateral. */
+    int x_area = SIDEBAR_RECOLHIDA;
+    int largura_area = vw - SIDEBAR_RECOLHIDA;
     if (largura_area < 1) largura_area = 1;
 
     desenhar_cabecalho(x_area, largura_area);
@@ -583,9 +1044,16 @@ void ui_menu_desenhar(void) {
         }
     }
 
-    int titulo_y = area.y + area.h;
+    /* O titulo acompanha a geometria do cartucho ativo, nao uma zona independente. */
+    int cart_box=(int)(area.h*0.62f);
+    int limite=(int)(area.w*0.30f);
+    if(cart_box>limite) cart_box=limite;
+    if(cart_box>340) cart_box=340;
+    if(cart_box<64) cart_box=64;
+    int titulo_y=area.y+(int)(area.h*0.47f)+cart_box/2+29;
     desenhar_linha_titulo(x_area, largura_area, titulo_y);
-    /* A faixa inferior permanece livre para a futura animacao de encaixe. */
+    desenhar_slot(x_area+largura_area/2,titulo_y+31);
+    if(vw>530 && vh>440) desenhar_atalhos(vw,vh);
 
     if (aviso[0] && SDL_GetTicks() < aviso_ate) {
         int larg = ui_texto_largura(aviso, 2) + 24;
@@ -597,24 +1065,57 @@ void ui_menu_desenhar(void) {
                                  tema->aviso, (SDL_Color){ 0, 0, 0, 0 });
     }
 
-    if (tela_configuracoes) {
-        SDL_Rect painel = { x_area + (largura_area - 420) / 2, vh / 2 - 112, 420, 224 };
-        preencher(painel, (SDL_Color){ 18, 24, 40, 245 });
-        contorno(painel, 2, tema->destaque);
-        ui_texto_desenhar_centro("CONFIGURACOES", painel.x + painel.w / 2,
-                                 painel.y + 24, 2, tema->texto,
-                                 (SDL_Color){0,0,0,0});
-        SDL_Rect op1 = { painel.x + 24, painel.y + 82, painel.w - 48, 42 };
-        SDL_Rect op2 = { painel.x + 24, painel.y + 136, painel.w - 48, 42 };
-        if (opcao_configuracoes == 0) preencher(op1, tema->destaque);
-        else preencher(op1, tema->painel);
-        if (opcao_configuracoes == 1) preencher(op2, tema->destaque);
-        else preencher(op2, tema->painel);
-        SDL_Color c1 = opcao_configuracoes == 0 ? (SDL_Color){255,255,255,255} : tema->texto;
-        SDL_Color c2 = opcao_configuracoes == 1 ? (SDL_Color){255,255,255,255} : tema->texto;
-        ui_texto_desenhar_centro("Restaurar consoles ocultos", op1.x + op1.w / 2,
-                                 op1.y + 15, 1, c1, (SDL_Color){0,0,0,0});
-        ui_texto_desenhar_centro("Voltar ao menu", op2.x + op2.w / 2,
-                                 op2.y + 15, 1, c2, (SDL_Color){0,0,0,0});
+    if(tela_previa_wallpaper) {
+        SDL_Rect caixa={vw/2-230,vh/2-155,460,310};
+        desenhar_capsula(caixa,(SDL_Color){22,27,43,240},(SDL_Color){255,255,255,120});
+        if(preview_textura) {
+            int w,h; SDL_QueryTexture(preview_textura,NULL,NULL,&w,&h);
+            desenhar_encaixado(preview_textura,w,h,(SDL_Rect){caixa.x+20,caixa.y+25,420,225},255);
+        }
+        ui_texto_desenhar_centro("<  PREVIA DO WALLPAPER  >",vw/2,caixa.y+258,1,(SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0});
+        ui_texto_desenhar_centro("ENTER Aplicar   ESC Cancelar",vw/2,caixa.y+284,1,(SDL_Color){220,225,235,255},(SDL_Color){0,0,0,0});
+    } else if(tela_configuracoes || tela_aparencia) {
+        const int custom=tela_aparencia;
+        const int n=custom?5:2;
+        const int claro=preset_ativo()!=PRESET_DARK;
+        SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
+        SDL_Color fundo=claro?(SDL_Color){225,239,251,233}:(SDL_Color){22,35,72,233};
+        SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
+        int pw=custom?360:340;
+        if(pw>vw-42) pw=vw-42;
+        int ph=custom?330:178;
+        if(ph>vh-46) ph=vh-46;
+        /* Posicionado ao lado do menu, evitando o cartucho central. */
+        int painel_x=sidebar_aberta?SIDEBAR_ABERTA+20:SIDEBAR_RECOLHIDA+20;
+        if(painel_x+pw>vw-16) painel_x=vw-pw-16;
+        SDL_Rect painel={painel_x,(vh-ph)/2,pw,ph};
+        arredondado((SDL_Rect){painel.x+3,painel.y+5,painel.w,painel.h},25,
+                    (SDL_Color){10,24,46,35},0);
+        arredondado(painel,25,fundo,0);
+        arredondado(painel,25,borda,1);
+        ui_texto_desenhar(custom?"CUSTOMIZAÇÃO":"CONFIGURAÇÕES",painel.x+20,
+                          painel.y+17,2,tinta,(SDL_Color){0,0,0,0});
+        int altura_linha=custom?48:45;
+        for(int i=0;i<n;++i) {
+            char nome[150];
+            if(custom) {
+                switch(i) {
+                case 0: snprintf(nome,sizeof(nome),"Contraste automático: %s",contraste_automatico?"Ligado":"Desligado"); break;
+                case 1: snprintf(nome,sizeof(nome),"Preset manual: %s",nomes_presets[manual_preset]); break;
+                case 2: snprintf(nome,sizeof(nome),"Escolher wallpaper"); break;
+                case 3: snprintf(nome,sizeof(nome),"Restaurar wallpaper padrão"); break;
+                default: snprintf(nome,sizeof(nome),"Voltar");
+                }
+            } else {
+                snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":"Voltar");
+            }
+            SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,painel.w-22,altura_linha-6};
+            if((custom?opcao_aparencia:opcao_configuracoes)==i) {
+                arredondado(linha,14,claro?(SDL_Color){255,255,255,130}:(SDL_Color){108,142,210,76},0);
+                arredondado(linha,14,tinta,1);
+            }
+            ui_texto_desenhar(nome,linha.x+11,linha.y+10,1,tinta,(SDL_Color){0,0,0,0});
+        }
+
     }
 }

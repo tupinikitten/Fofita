@@ -15,6 +15,26 @@ int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, uns
     if (port != 0 || device != RETRO_DEVICE_JOYPAD || index != 0) return 0;
     
     const Uint8 *teclas = SDL_GetKeyboardState(NULL);
+    /* GameController padrao SDL2: o mesmo mapeamento em Windows/Linux/portateis. */
+    SDL_GameController *pad = NULL;
+    for (int i=0; i<SDL_NumJoysticks(); ++i) {
+        if (SDL_IsGameController(i)) {pad=SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(i)); if(pad) break;}
+    }
+    if(pad) {
+        SDL_GameControllerButton btn=SDL_CONTROLLER_BUTTON_INVALID;
+        switch(id) {
+        case RETRO_DEVICE_ID_JOYPAD_UP: btn=SDL_CONTROLLER_BUTTON_DPAD_UP; break;
+        case RETRO_DEVICE_ID_JOYPAD_DOWN: btn=SDL_CONTROLLER_BUTTON_DPAD_DOWN; break;
+        case RETRO_DEVICE_ID_JOYPAD_LEFT: btn=SDL_CONTROLLER_BUTTON_DPAD_LEFT; break;
+        case RETRO_DEVICE_ID_JOYPAD_RIGHT: btn=SDL_CONTROLLER_BUTTON_DPAD_RIGHT; break;
+        case RETRO_DEVICE_ID_JOYPAD_START: btn=SDL_CONTROLLER_BUTTON_START; break;
+        case RETRO_DEVICE_ID_JOYPAD_SELECT: btn=SDL_CONTROLLER_BUTTON_BACK; break;
+        case RETRO_DEVICE_ID_JOYPAD_A: btn=SDL_CONTROLLER_BUTTON_A; break;
+        case RETRO_DEVICE_ID_JOYPAD_B: btn=SDL_CONTROLLER_BUTTON_B; break;
+        default: break;
+        }
+        if(btn!=SDL_CONTROLLER_BUTTON_INVALID && SDL_GameControllerGetButton(pad,btn)) return 1;
+    }
     switch (id) {
         case RETRO_DEVICE_ID_JOYPAD_UP:     return teclas[SDL_SCANCODE_UP];
         case RETRO_DEVICE_ID_JOYPAD_DOWN:   return teclas[SDL_SCANCODE_DOWN];

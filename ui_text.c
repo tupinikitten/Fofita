@@ -1,177 +1,72 @@
 #include "ui_text.h"
+#include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <string.h>
-
-#define GLIFO_PRIMEIRO 32
-#define GLIFO_ULTIMO 126
-#define GLIFO_QTD (GLIFO_ULTIMO - GLIFO_PRIMEIRO + 1)
-#define GLIFO_COLUNAS 5
-#define GLIFO_LINHAS 8      /* 7 linhas da letra + 1 para as hastes descendentes (g, j, p, q, y) */
-#define GLIFO_AVANCO 6      /* 5 colunas + 1 de espaco entre letras */
-
-/* Cada glifo = 5 colunas; em cada coluna o bit 0 e a linha de cima. */
-static const unsigned char fonte_5x7[GLIFO_QTD][GLIFO_COLUNAS] = {
-    {0x00,0x00,0x00,0x00,0x00}, {0x00,0x00,0x5F,0x00,0x00}, {0x00,0x07,0x00,0x07,0x00}, {0x14,0x7F,0x14,0x7F,0x14},
-    {0x24,0x2A,0x7F,0x2A,0x12}, {0x23,0x13,0x08,0x64,0x62}, {0x36,0x49,0x56,0x20,0x50}, {0x00,0x08,0x07,0x03,0x00},
-    {0x00,0x1C,0x22,0x41,0x00}, {0x00,0x41,0x22,0x1C,0x00}, {0x2A,0x1C,0x7F,0x1C,0x2A}, {0x08,0x08,0x3E,0x08,0x08},
-    {0x00,0x80,0x70,0x30,0x00}, {0x08,0x08,0x08,0x08,0x08}, {0x00,0x00,0x60,0x60,0x00}, {0x20,0x10,0x08,0x04,0x02},
-    {0x3E,0x51,0x49,0x45,0x3E}, {0x00,0x42,0x7F,0x40,0x00}, {0x72,0x49,0x49,0x49,0x46}, {0x21,0x41,0x49,0x4D,0x33},
-    {0x18,0x14,0x12,0x7F,0x10}, {0x27,0x45,0x45,0x45,0x39}, {0x3C,0x4A,0x49,0x49,0x31}, {0x41,0x21,0x11,0x09,0x07},
-    {0x36,0x49,0x49,0x49,0x36}, {0x46,0x49,0x49,0x29,0x1E}, {0x00,0x00,0x14,0x00,0x00}, {0x00,0x40,0x34,0x00,0x00},
-    {0x00,0x08,0x14,0x22,0x41}, {0x14,0x14,0x14,0x14,0x14}, {0x00,0x41,0x22,0x14,0x08}, {0x02,0x01,0x59,0x09,0x06},
-    {0x3E,0x41,0x5D,0x59,0x4E}, {0x7C,0x12,0x11,0x12,0x7C}, {0x7F,0x49,0x49,0x49,0x36}, {0x3E,0x41,0x41,0x41,0x22},
-    {0x7F,0x41,0x41,0x41,0x3E}, {0x7F,0x49,0x49,0x49,0x41}, {0x7F,0x09,0x09,0x09,0x01}, {0x3E,0x41,0x41,0x51,0x73},
-    {0x7F,0x08,0x08,0x08,0x7F}, {0x00,0x41,0x7F,0x41,0x00}, {0x20,0x40,0x41,0x3F,0x01}, {0x7F,0x08,0x14,0x22,0x41},
-    {0x7F,0x40,0x40,0x40,0x40}, {0x7F,0x02,0x1C,0x02,0x7F}, {0x7F,0x04,0x08,0x10,0x7F}, {0x3E,0x41,0x41,0x41,0x3E},
-    {0x7F,0x09,0x09,0x09,0x06}, {0x3E,0x41,0x51,0x21,0x5E}, {0x7F,0x09,0x19,0x29,0x46}, {0x26,0x49,0x49,0x49,0x32},
-    {0x03,0x01,0x7F,0x01,0x03}, {0x3F,0x40,0x40,0x40,0x3F}, {0x1F,0x20,0x40,0x20,0x1F}, {0x3F,0x40,0x38,0x40,0x3F},
-    {0x63,0x14,0x08,0x14,0x63}, {0x03,0x04,0x78,0x04,0x03}, {0x61,0x59,0x49,0x4D,0x43}, {0x00,0x7F,0x41,0x41,0x41},
-    {0x02,0x04,0x08,0x10,0x20}, {0x00,0x41,0x41,0x41,0x7F}, {0x04,0x02,0x01,0x02,0x04}, {0x40,0x40,0x40,0x40,0x40},
-    {0x00,0x03,0x07,0x08,0x00}, {0x20,0x54,0x54,0x78,0x40}, {0x7F,0x28,0x44,0x44,0x38}, {0x38,0x44,0x44,0x44,0x28},
-    {0x38,0x44,0x44,0x28,0x7F}, {0x38,0x54,0x54,0x54,0x18}, {0x00,0x08,0x7E,0x09,0x02}, {0x18,0xA4,0xA4,0x9C,0x78},
-    {0x7F,0x08,0x04,0x04,0x78}, {0x00,0x44,0x7D,0x40,0x00}, {0x20,0x40,0x40,0x3D,0x00}, {0x7F,0x10,0x28,0x44,0x00},
-    {0x00,0x41,0x7F,0x40,0x00}, {0x7C,0x04,0x78,0x04,0x78}, {0x7C,0x08,0x04,0x04,0x78}, {0x38,0x44,0x44,0x44,0x38},
-    {0xFC,0x18,0x24,0x24,0x18}, {0x18,0x24,0x24,0x18,0xFC}, {0x7C,0x08,0x04,0x04,0x08}, {0x48,0x54,0x54,0x54,0x24},
-    {0x04,0x04,0x3F,0x44,0x24}, {0x3C,0x40,0x40,0x20,0x7C}, {0x1C,0x20,0x40,0x20,0x1C}, {0x3C,0x40,0x30,0x40,0x3C},
-    {0x44,0x28,0x10,0x28,0x44}, {0x4C,0x90,0x90,0x90,0x7C}, {0x44,0x64,0x54,0x4C,0x44}, {0x00,0x08,0x36,0x41,0x00},
-    {0x00,0x00,0x77,0x00,0x00}, {0x00,0x41,0x36,0x08,0x00}, {0x02,0x01,0x02,0x04,0x02}
-};
-
-/* Latin-1 U+00C0..U+00FF sem acento (para nomes de ROMs como "Pokémon" ou "Ação"). */
-static const char latin1_base[] =
-    "AAAAAAACEEEEIIII"
-    "DNOOOOOxOUUUUY?s"
-    "aaaaaaaceeeeiiii"
-    "dnooooo/ouuuuy?y";
-
-static SDL_Renderer *renderer_texto = NULL;
+/* Atlas prerenderizado da fonte Lato Semibold: nao requer SDL_ttf. */
+#define CELL 40
 static SDL_Texture *atlas = NULL;
-
+static SDL_Renderer *r = NULL;
+static const unsigned char larguras[224] = {6, 7, 9, 14, 14, 19, 17, 6, 6, 6, 10, 14, 6, 9, 6, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 6, 6, 14, 14, 14, 11, 20, 16, 16, 16, 18, 14, 14, 17, 18, 7, 10, 16, 12, 22, 18, 19, 15, 19, 15, 13, 14, 18, 16, 25, 16, 15, 14, 7, 11, 7, 14, 11, 10, 12, 14, 12, 14, 13, 9, 13, 13, 6, 6, 13, 6, 20, 13, 14, 14, 14, 9, 10, 9, 13, 13, 19, 12, 13, 11, 7, 6, 7, 14, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 6, 6, 14, 14, 14, 14, 6, 12, 10, 20, 9, 11, 14, 6, 20, 10, 10, 14, 8, 8, 10, 16, 17, 6, 10, 8, 10, 11, 18, 18, 18, 11, 16, 16, 16, 16, 16, 16, 22, 16, 14, 14, 14, 14, 7, 7, 7, 7, 18, 18, 19, 19, 19, 19, 19, 14, 19, 18, 18, 18, 18, 15, 15, 14, 12, 12, 12, 12, 12, 12, 19, 12, 13, 13, 13, 13, 6, 6, 6, 6, 14, 13, 14, 14, 14, 14, 14, 14, 14, 13, 13, 13, 13, 13, 14, 13};
+static int prox(const unsigned char **ptr) {
+    const unsigned char *s=*ptr;
+    if (!*s) return -1;
+    unsigned c=*s++;
+    if (c>=0xC2 && c<=0xC3 && (*s&0xC0)==0x80) {
+        c=((c&31)<<6)|(*s++&63);
+    } else if(c>=128) {
+        while((*s&0xC0)==0x80) ++s;
+        c='?';
+    }
+    *ptr=s;
+    return (c>=32 && c<=255) ? (int)c-32 : ('?'-32);
+}
+static float fator(int escala) { return escala<=1 ? 0.67f : (escala==2 ? 1.f : escala*0.5f); }
 int ui_texto_init(SDL_Renderer *renderer) {
     ui_texto_fechar();
     if (!renderer) return 0;
-
-    SDL_Surface *surf = SDL_CreateRGBSurfaceWithFormat(
-        0, GLIFO_QTD * GLIFO_AVANCO, GLIFO_LINHAS, 32, SDL_PIXELFORMAT_RGBA32);
-    if (!surf) return 0;
-
-    Uint32 branco = SDL_MapRGBA(surf->format, 255, 255, 255, 255);
-    SDL_FillRect(surf, NULL, SDL_MapRGBA(surf->format, 255, 255, 255, 0));
-
-    if (SDL_LockSurface(surf) == 0) {
-        for (int g = 0; g < GLIFO_QTD; ++g) {
-            for (int col = 0; col < GLIFO_COLUNAS; ++col) {
-                for (int lin = 0; lin < GLIFO_LINHAS; ++lin) {
-                    if (!((fonte_5x7[g][col] >> lin) & 1)) continue;
-                    Uint32 *pixel = (Uint32 *)((Uint8 *)surf->pixels + lin * surf->pitch
-                                               + (g * GLIFO_AVANCO + col) * 4);
-                    *pixel = branco;
-                }
-            }
-        }
-        SDL_UnlockSurface(surf);
-    }
-
-    atlas = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_FreeSurface(surf);
-    if (!atlas) return 0;
-
-    SDL_SetTextureBlendMode(atlas, SDL_BLENDMODE_BLEND);
-    renderer_texto = renderer;
-    return 1;
+    atlas=IMG_LoadTexture(renderer,"ui/font/lato_atlas.png");
+    if (!atlas) { fprintf(stderr,"Atlas da fonte nao encontrado: %s\n",IMG_GetError()); return 0; }
+    SDL_SetTextureBlendMode(atlas,SDL_BLENDMODE_BLEND);
+    r=renderer; return 1;
 }
-
-void ui_texto_fechar(void) {
-    if (atlas) SDL_DestroyTexture(atlas);
-    atlas = NULL;
-    renderer_texto = NULL;
+void ui_texto_fechar(void) { if(atlas) SDL_DestroyTexture(atlas); atlas=NULL; r=NULL; }
+int ui_texto_altura(int escala) { return (int)(29*fator(escala)+0.5f); }
+int ui_texto_largura(const char *texto,int escala) {
+    if(!texto) return 0;
+    const unsigned char *p=(const unsigned char*)texto; int c; float n=0;
+    while((c=prox(&p))>=0) n+=larguras[c]+1;
+    return (int)(n*fator(escala)+0.5f);
 }
-
-/* Le o proximo caractere UTF-8 e devolve o indice do glifo (ou -1 no fim). */
-static int proximo_glifo(const unsigned char **p) {
-    const unsigned char *s = *p;
-    if (*s == '\0') return -1;
-
-    int c = *s++;
-
-    if (c >= 0x80) {
-        if (c == 0xC3 && (*s & 0xC0) == 0x80) {
-            c = latin1_base[*s - 0x80];   /* segundo byte 0x80 = U+00C0 */
-            s++;
-        } else {
-            c = '?';
-            while ((*s & 0xC0) == 0x80) s++;   /* pula o resto do caractere desconhecido */
-        }
-    }
-
-    *p = s;
-    if (c < GLIFO_PRIMEIRO || c > GLIFO_ULTIMO) c = '?';
-    return c - GLIFO_PRIMEIRO;
-}
-
-int ui_texto_altura(int escala) {
-    return GLIFO_LINHAS * (escala < 1 ? 1 : escala);
-}
-
-int ui_texto_largura(const char *texto, int escala) {
-    if (!texto) return 0;
-    if (escala < 1) escala = 1;
-
-    int n = 0;
-    const unsigned char *p = (const unsigned char *)texto;
-    while (proximo_glifo(&p) >= 0) n++;
-
-    return n > 0 ? (n * GLIFO_AVANCO - 1) * escala : 0;
-}
-
-static void desenhar_simples(const char *texto, int x, int y, int escala, SDL_Color cor) {
-    SDL_SetTextureColorMod(atlas, cor.r, cor.g, cor.b);
-    SDL_SetTextureAlphaMod(atlas, cor.a);
-
-    const unsigned char *p = (const unsigned char *)texto;
-    int g;
-    while ((g = proximo_glifo(&p)) >= 0) {
-        SDL_Rect origem = { g * GLIFO_AVANCO, 0, GLIFO_COLUNAS, GLIFO_LINHAS };
-        SDL_Rect destino = { x, y, GLIFO_COLUNAS * escala, GLIFO_LINHAS * escala };
-        SDL_RenderCopy(renderer_texto, atlas, &origem, &destino);
-        x += GLIFO_AVANCO * escala;
+static void texto_draw(const char *texto,int x,int y,int escala,SDL_Color cor) {
+    if (!atlas || !texto) return;
+    float f=fator(escala); float pos=(float)x;
+    SDL_SetTextureColorMod(atlas,cor.r,cor.g,cor.b);
+    SDL_SetTextureAlphaMod(atlas,cor.a);
+    const unsigned char *p=(const unsigned char*)texto; int c;
+    while((c=prox(&p))>=0) {
+        SDL_Rect src={ (c%16)*CELL,(c/16)*CELL,CELL,CELL };
+        SDL_Rect dst={ (int)(pos+0.5f),y,(int)(CELL*f+0.5f),(int)(CELL*f+0.5f) };
+        SDL_RenderCopy(r,atlas,&src,&dst);
+        pos+=(larguras[c]+1)*f;
     }
 }
-
-void ui_texto_desenhar(const char *texto, int x, int y, int escala,
-                       SDL_Color cor, SDL_Color cor_sombra) {
-    if (!texto || !atlas || !renderer_texto) return;
-    if (escala < 1) escala = 1;
-
-    if (cor_sombra.a > 0) {
-        int desloc = (escala + 1) / 2;
-        desenhar_simples(texto, x + desloc, y + desloc, escala, cor_sombra);
-    }
-    desenhar_simples(texto, x, y, escala, cor);
+void ui_texto_desenhar(const char *texto,int x,int y,int escala,SDL_Color cor,SDL_Color sombra) {
+    if(sombra.a) texto_draw(texto,x+1,y+2,escala,sombra);
+    texto_draw(texto,x,y,escala,cor);
 }
-
-void ui_texto_desenhar_centro(const char *texto, int centro_x, int y, int escala,
-                              SDL_Color cor, SDL_Color cor_sombra) {
-    ui_texto_desenhar(texto, centro_x - ui_texto_largura(texto, escala) / 2, y,
-                      escala, cor, cor_sombra);
+void ui_texto_desenhar_centro(const char *texto,int centro_x,int y,int escala,SDL_Color cor,SDL_Color sombra) {
+    ui_texto_desenhar(texto,centro_x-ui_texto_largura(texto,escala)/2,y,escala,cor,sombra);
 }
-
-void ui_texto_ajustar(const char *texto, int max_largura, int escala,
-                      char *saida, size_t capacidade) {
-    if (!saida || capacidade == 0) return;
-    saida[0] = '\0';
-    if (!texto) return;
-
-    snprintf(saida, capacidade, "%s", texto);
-    if (ui_texto_largura(saida, escala) <= max_largura) return;
-
-    /* Corta caractere a caractere (sem partir sequencias UTF-8) ate caber com "...". */
-    size_t len = strlen(saida);
-    while (len > 0) {
-        do { len--; } while (len > 0 && ((unsigned char)saida[len] & 0xC0) == 0x80);
-        if (len + 4 > capacidade) continue;
-        memcpy(saida + len, "...", 4);
-        if (ui_texto_largura(saida, escala) <= max_largura) return;
+void ui_texto_ajustar(const char *texto,int max_largura,int escala,char *saida,size_t capacidade) {
+    if(!saida||!capacidade) return;
+    snprintf(saida,capacidade,"%s",texto?texto:"");
+    if(ui_texto_largura(saida,escala)<=max_largura) return;
+    size_t len=strlen(saida);
+    while(len) {
+        do { --len; } while(len && ((unsigned char)saida[len]&0xc0)==0x80);
+        if(len+4>capacidade) continue;
+        memcpy(saida+len,"...",4);
+        if(ui_texto_largura(saida,escala)<=max_largura) return;
     }
-    snprintf(saida, capacidade, "...");
+    snprintf(saida,capacidade,"...");
 }

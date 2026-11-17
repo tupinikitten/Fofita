@@ -28,4 +28,11 @@ void ui_menu_focar_carrossel(void);
 /* Mensagem temporaria no topo da area do carrossel. */
 void ui_menu_aviso(const char *mensagem);
 
+/* Arrastar PNG/JPG para a janela abre a previa de wallpaper. */
+void ui_menu_wallpaper_solto(const char *caminho);
+void ui_menu_animar_slot(void);
+MenuAcao ui_menu_clique(int mx, int my);
+void ui_menu_rolagem(int direcao);
+void ui_menu_controle_conectado(int sim);
+
 #endif
