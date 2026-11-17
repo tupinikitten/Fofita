@@ -29,6 +29,7 @@ jobs:
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-SDL2_image
+            mingw-w64-x86_64-sdl3
             zip
 
       - name: Compilar Fofita
@@ -55,6 +56,20 @@ jobs:
           while IFS= read -r -d '' core; do
             queue+=("$core")
           done < <(find dist/Fofita/cores -type f -iname '*.dll' -print0 2>/dev/null || true)
+
+          # sdl2-compat carrega SDL3.dll via LoadLibrary em tempo de execucao.
+          # A DLL nao aparece na tabela de imports PE: inclui-la explicitamente
+          # quando a SDL2 instalada e a camada de compatibilidade.
+          if grep -aFq 'SDL3.dll' /mingw64/bin/SDL2.dll || \
+             grep -aFq 'Failed loading SDL3 library' /mingw64/bin/SDL2.dll; then
+            test -s /mingw64/bin/SDL3.dll || {
+              echo "::error::SDL2-compat detectado, mas SDL3.dll nao foi encontrado"
+              exit 1
+            }
+            cp /mingw64/bin/SDL3.dll dist/Fofita/SDL3.dll
+            queue+=(/mingw64/bin/SDL3.dll)
+            echo "Incluida SDL3.dll: dependencia dinamica do sdl2-compat"
+          fi
 
           index=0
           while (( index < ${#queue[@]} )); do
@@ -83,6 +98,14 @@ jobs:
             }
           done
           test -s dist/Fofita/Fofita.exe
+          # O build nao e considerado pronto se sdl2-compat estiver sem seu backend.
+          if grep -aFq 'SDL3.dll' dist/Fofita/SDL2.dll || \
+             grep -aFq 'Failed loading SDL3 library' dist/Fofita/SDL2.dll; then
+            test -s dist/Fofita/SDL3.dll || {
+              echo "::error::SDL3.dll ausente do pacote"
+              exit 1
+            }
+          fi
           echo "Pacote final preparado:"
           find dist/Fofita -maxdepth 1 -type f -printf '%f\n' | sort
 
