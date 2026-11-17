@@ -958,6 +958,82 @@ static void desenhar_linha_titulo(int x_area, int vw, int y) {
     }
 }
 
+/* Fallback vetorial: os PNGs ui/styles/icons podem nao estar versionados.
+   O desenho usa SDL2 e respeita os presets de cor sem dependencia externa. */
+static void icone_linha(int x1,int y1,int x2,int y2) {
+    SDL_RenderDrawLine(renderer,x1,y1,x2,y2);
+}
+static void desenhar_icone_fallback(int indice,SDL_Rect caixa,SDL_Color cor) {
+    int x=caixa.x,y=caixa.y,w=caixa.w,h=caixa.h;
+    int l=x+3,r=x+w-4,t=y+3,b=y+h-4,cx=x+w/2,cy=y+h/2;
+    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,255);
+    switch(indice) {
+    case LATERAL_CONQUISTAS: {
+        SDL_Rect ta={x+7,y+4,w-14,h/2}; SDL_RenderDrawRect(renderer,&ta);
+        icone_linha(l,t+3,x+7,t+3); icone_linha(r,t+3,x+w-7,t+3);
+        icone_linha(cx,cy,cx,b-3); icone_linha(cx-6,b-2,cx+6,b-2);
+        break;
+    }
+    case LATERAL_CONFIGURACOES: {
+        SDL_Rect ex={x+5,y+5,w-10,h-10};
+        SDL_Rect in={x+10,y+10,w-20,h-20};
+        SDL_RenderDrawRect(renderer,&ex); SDL_RenderDrawRect(renderer,&in);
+        icone_linha(cx,t,cx,y+5); icone_linha(cx,b-2,cx,b);
+        icone_linha(l,cy,x+5,cy); icone_linha(r-2,cy,r,cy);
+        break;
+    }
+    case LATERAL_FILTROS:
+        icone_linha(l,t,r,t); icone_linha(l,t,cx-3,cy+2);
+        icone_linha(r,t,cx+3,cy+2); icone_linha(cx-3,cy+2,cx-3,b);
+        icone_linha(cx+3,cy+2,cx+3,b); icone_linha(cx-3,b,cx+3,b);
+        break;
+    case LATERAL_FAVORITOS:
+        icone_linha(cx,b,l,cy-2); icone_linha(cx,b,r,cy-2);
+        icone_linha(l,cy-2,l+2,t+4); icone_linha(l+2,t+4,cx,t+7);
+        icone_linha(cx,t+7,r-2,t+4); icone_linha(r-2,t+4,r,cy-2);
+        break;
+    case LATERAL_CUSTOMIZACAO:
+        icone_linha(l,b,r-3,t+2); icone_linha(l+2,b,cx-5,b);
+        icone_linha(r-3,t+2,r,t+7); icone_linha(r,t+7,r-5,t+10);
+        icone_linha(cx-7,cy+4,cx-3,cy+8);
+        break;
+    case LATERAL_SAIR: {
+        SDL_Rect porta={x+9,y+5,w-14,h-10}; SDL_RenderDrawRect(renderer,&porta);
+        icone_linha(l,cy,cx+3,cy); icone_linha(cx,cy-5,cx+5,cy);
+        icone_linha(cx+5,cy,cx,cy+5);
+        break;
+    }
+    }
+}
+
+/* Contorno por linhas e arcos: nao depende da mascara RGBA da textura
+   arredondada, que em alguns backends cobria a legenda selecionada. */
+static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
+    if(r.w<=2 || r.h<=2) return;
+    if(raio>r.h/2) raio=r.h/2;
+    if(raio>r.w/2) raio=r.w/2;
+    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,cor.a);
+    for(int stroke=0;stroke<2;++stroke) {
+        int x=r.x+stroke,y=r.y+stroke,w=r.w-2*stroke,h=r.h-2*stroke;
+        int rad=raio-stroke; if(rad<1)rad=1;
+        icone_linha(x+rad,y,x+w-1-rad,y);
+        icone_linha(x+rad,y+h-1,x+w-1-rad,y+h-1);
+        icone_linha(x,y+rad,x,y+h-1-rad);
+        icone_linha(x+w-1,y+rad,x+w-1,y+h-1-rad);
+        for(int deg=0;deg<=90;++deg) {
+            float a=deg*0.01745329252f;
+            int dx=(int)lroundf(rad*cosf(a));
+            int dy=(int)lroundf(rad*sinf(a));
+            SDL_RenderDrawPoint(renderer,x+rad-dx,y+rad-dy);
+            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+rad-dy);
+            SDL_RenderDrawPoint(renderer,x+rad-dx,y+h-1-rad+dy);
+            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+h-1-rad+dy);
+        }
+    }
+}
+
 static void desenhar_sidebar(int vh) {
     const Preset preset=preset_ativo();
     const int claro=preset!=PRESET_DARK;
@@ -992,7 +1068,7 @@ static void desenhar_sidebar(int vh) {
                      claro?(SDL_Color){35,65,95,85}:(SDL_Color){225,235,255,95});
         if(ativo) {
             arredondado(item,aberta?18:17,(SDL_Color){255,255,255,em_foco?34:20},0);
-            arredondado(item,aberta?18:17,(SDL_Color){cor.r,cor.g,cor.b,em_foco?245:215},2);
+            contorno_selecao(item,aberta?18:17,(SDL_Color){cor.r,cor.g,cor.b,em_foco?245:215});
         }
         if(icones_laterais[i]) {
             SDL_Rect caixa=aberta
@@ -1000,6 +1076,11 @@ static void desenhar_sidebar(int vh) {
                 : (SDL_Rect){item.x+(item.w-SIDEBAR_ICON)/2,item.y+7,SIDEBAR_ICON,SIDEBAR_ICON};
             int tw=0,th=0; SDL_QueryTexture(icones_laterais[i],NULL,NULL,&tw,&th);
             desenhar_encaixado(icones_laterais[i],tw,th,caixa,ativo?255:238);
+        } else {
+            SDL_Rect caixa=aberta
+                ? (SDL_Rect){item.x+12,item.y+(item.h-28)/2,28,28}
+                : (SDL_Rect){item.x+(item.w-SIDEBAR_ICON)/2,item.y+7,SIDEBAR_ICON,SIDEBAR_ICON};
+            desenhar_icone_fallback(i,caixa,cor);
         }
         if(aberta) ui_texto_desenhar(nomes_laterais[i],item.x+50,
                       item.y+(item.h-ui_texto_altura(1))/2,1,texto,(SDL_Color){0,0,0,0});
@@ -1112,7 +1193,7 @@ void ui_menu_desenhar(void) {
             SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,painel.w-22,altura_linha-6};
             if((custom?opcao_aparencia:opcao_configuracoes)==i) {
                 arredondado(linha,14,claro?(SDL_Color){255,255,255,130}:(SDL_Color){108,142,210,76},0);
-                arredondado(linha,14,tinta,1);
+                contorno_selecao(linha,14,(SDL_Color){tinta.r,tinta.g,tinta.b,215});
             }
             ui_texto_desenhar(nome,linha.x+11,linha.y+10,1,tinta,(SDL_Color){0,0,0,0});
         }
