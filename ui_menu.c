@@ -118,12 +118,20 @@ static void obter_geometria_sidebar(int vh, SDL_Rect *painel, int *lista_y, int 
         if (h_item) *h_item = passo;
         if (lista_y) *lista_y = painel->y + (painel->h - 6 * passo) / 2 + 18;
     } else {
-        painel->w = SIDEBAR_RECOLHIDA - 20;
-        painel->h = TOTAL_ACOES_LATERAIS * SIDEBAR_ITEM_H + 34;
+        /* Nas previas, a pilula recolhida tem quase a altura total da
+           janela; nao e uma capsula curta centralizada. Distribuir
+           as seis acoes numa faixa central, deixando respiro nas pontas. */
+        painel->w = SIDEBAR_RECOLHIDA - 26;
+        painel->h = vh - 36;
         painel->x = 16;
-        painel->y = (vh - painel->h) / 2 > 24 ? (vh - painel->h) / 2 : 24;
-        if (lista_y) *lista_y = painel->y + 14;
-        if (h_item) *h_item = SIDEBAR_ITEM_H;
+        painel->y = 18;
+        if (painel->h < 360) painel->h = 360;
+        if (painel->h > vh - 12) painel->h = vh - 12;
+        int passo = painel->h / 11;
+        if (passo < 48) passo = 48;
+        if (passo > 66) passo = 66;
+        if (h_item) *h_item = passo;
+        if (lista_y) *lista_y = painel->y + (painel->h - TOTAL_ACOES_LATERAIS * passo) / 2 + 10;
     }
 }
 
@@ -1121,22 +1129,32 @@ static void desenhar_sidebar(int vh) {
     arredondado((SDL_Rect){painel.x+2,painel.y+4,painel.w,painel.h},aberta?28:painel.w/2,
                 (SDL_Color){10,20,40,26},0);
     if(aberta) {
-        arredondado(painel,28,claro?(SDL_Color){213,233,248,188}:(SDL_Color){16,31,70,188},0);
-        arredondado(painel,28,claro?(SDL_Color){252,253,255,210}:(SDL_Color){191,207,242,88},1);
+        /* Painel de vidro tingido: Colorful/Light azulado, Dark marinho.
+           Nao trocar wallpaper ao mudar preset de icones. */
+        SDL_Color vidro=preset==PRESET_DARK
+            ? (SDL_Color){22,37,82,190}
+            : preset==PRESET_COLORFUL
+                ? (SDL_Color){175,217,247,178}
+                : (SDL_Color){207,234,250,183};
+        arredondado(painel,28,vidro,0);
+        arredondado(painel,28,claro?(SDL_Color){248,253,255,205}:(SDL_Color){191,207,242,110},1);
         SDL_Rect botao={painel.x+16,painel.y+14,40,40};
         arredondado(botao,20,(SDL_Color){255,255,255,36},0);
         arredondado(botao,20,(SDL_Color){texto.r,texto.g,texto.b,225},1);
         ui_texto_desenhar_centro("^",botao.x+botao.w/2,botao.y+9,1,texto,(SDL_Color){0,0,0,0});
     } else {
-        desenhar_capsula(painel,claro?(SDL_Color){222,239,251,172}:(SDL_Color){14,28,65,178},
-                         claro?(SDL_Color){250,252,255,215}:(SDL_Color){191,207,242,88});
+        desenhar_capsula(painel,
+                         preset==PRESET_DARK ? (SDL_Color){14,26,62,195}
+                         : preset==PRESET_COLORFUL ? (SDL_Color){185,222,249,184}
+                         : (SDL_Color){211,236,252,184},
+                         claro?(SDL_Color){250,252,255,210}:(SDL_Color){191,207,242,105});
     }
 
     for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
         int y=lista_y+i*h_item;
         SDL_Rect item=aberta
             ? (SDL_Rect){painel.x+11,y,painel.w-22,h_item-7}
-            : (SDL_Rect){painel.x+7,y,painel.w-14,SIDEBAR_ITEM_H-5};
+            : (SDL_Rect){painel.x+7,y,painel.w-14,h_item-5};
         int ativo=item_lateral==i;
         int em_foco=foco==FOCO_SIDEBAR && ativo;
         SDL_Color cor=icone_cor(i);
