@@ -12,8 +12,9 @@ extern SDL_Texture *textura_jogo;
 extern int formato_de_cor;
 extern float proporcao_video; /* aspect ratio informado pelo core Libretro, se disponivel */
 
-/* Dashboard: canvas SDL logico 1920x1080, com geometria historica em 1280x720.
-   A escala 1.5 converte as coordenadas antigas para o canvas de referencia. */
+/* Dashboard: layout em coordenadas 1280x720, projetado uniformemente pelo SDL
+   nas resolucoes de saida 720p/1080p. A referencia visual 1920x1080
+   continua possivel sem aplicar escala extra ao renderer. */
 #define FOFITA_CANVAS_W 1920
 #define FOFITA_CANVAS_H 1080
 #define FOFITA_UI_W 1280
