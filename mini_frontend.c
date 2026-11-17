@@ -150,7 +150,11 @@ int main(int argc, char *argv[]) {
             }
             if(event.type==SDL_MOUSEBUTTONDOWN && event.button.button==SDL_BUTTON_LEFT) {
                 if(em_menu) {
-                    MenuAcao a=ui_menu_clique(event.button.x,event.button.y);
+                    /* Com logical size, mouse chega em pixels da janela.
+                       Converter antes da deteccao dos botoes do dashboard. */
+                    float lx=0.0f,ly=0.0f;
+                    SDL_RenderWindowToLogical(renderer,event.button.x,event.button.y,&lx,&ly);
+                    MenuAcao a=ui_menu_clique((int)lx,(int)ly);
                     if(a==MENU_ACAO_INICIAR_JOGO) {
                         ui_menu_animar_slot();
                         iniciar_apos=SDL_GetTicks()+380;
