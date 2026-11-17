@@ -295,19 +295,9 @@ static void carregar_icones_preset(void) {
             SDL_DestroyTexture(icones_laterais[i]);
             icones_laterais[i]=NULL;
         }
-        /* O pincel original usa nomenclatura antiga, sem sufixo de preset.
-           Reutilizar sua silhueta nos 3 temas, preservando alpha e cores
-           de cada modo; nao substitui o PNG original por um desenho SDL2. */
-        if(i==LATERAL_CUSTOMIZACAO) {
-            const char *pincel="ui/styles/dark/icons/brush_icon.png";
-            if(preset==PRESET_DARK)
-                icones_laterais[i]=IMG_LoadTexture(renderer,pincel);
-            else
-                icones_laterais[i]=carregar_icone_tingido(pincel,icone_cor(i));
-        }
-        /* Compatibilidade com as duas geracoes de assets. */
-        const char *nome_primario=(i==LATERAL_CUSTOMIZACAO)?"brush":nomes_arquivos[i];
-        const char *nome_reserva=(i==LATERAL_CUSTOMIZACAO)?"bucket":NULL;
+        /* Balde substitui intencionalmente o pincel nos presets novos. */
+        const char *nome_primario=nomes_arquivos[i];
+        const char *nome_reserva=(i==LATERAL_CUSTOMIZACAO)?"brush":NULL;
         if(!icones_laterais[i] && preset==PRESET_COLORFUL) {
             snprintf(caminho,sizeof(caminho),
                      "ui/styles/colorful/icons/%s_icon_colorful.png",nome_primario);
