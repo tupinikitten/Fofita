@@ -1,0 +1,80 @@
+name: Build Fofita - Windows
+
+on:
+  push:
+    branches: [main, "setup/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar compilador e SDL2 (MinGW64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-SDL2_image
+            zip
+
+      - name: Compilar Fofita
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -o Fofita.exe ./*.c \
+            $(pkg-config --cflags --libs sdl2 SDL2_image) -lm
+          test -s Fofita.exe
+
+      - name: Montar pacote testavel sem ROMs
+        run: |
+          set -euo pipefail
+          mkdir -p dist/Fofita
+          cp Fofita.exe dist/Fofita/
+          for folder in ui assets labels templates cores; do
+            if [ -d "$folder" ]; then cp -a "$folder" dist/Fofita/; fi
+          done
+          # Empacotar DLLs MinGW/SDL2 encontradas por ldd, recursivamente.
+          # Nao incluir DLLs do Windows System32 e nao incluir ROMs.
+          queue=(Fofita.exe)
+          shopt -s nocasematch
+          while (("${#queue[@]}" > 0)); do
+            current="${queue[0]}"
+            queue=("${queue[@]:1}")
+            while IFS= read -r dll; do
+              [ -f "$dll" ] || continue
+              case "$dll" in
+                /mingw64/bin/*) ;;
+                *) continue ;;
+              esac
+              filename="${dll##*/}"
+              if [ ! -f "dist/Fofita/$filename" ]; then
+                cp "$dll" "dist/Fofita/$filename"
+                queue+=("$dll")
+              fi
+            done < <(ldd "$current" | awk '$2 == "=>" && $3 ~ /^\// {print $3}')
+          done
+          shopt -u nocasematch
+          # Se o core NES existir no repositorio, empacota sem jogos.
+          test -f dist/Fofita/Fofita.exe
+          (cd dist && zip -qr ../Fofita-Windows.zip Fofita)
+
+      - name: Publicar ZIP para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fofita-Windows
+          path: Fofita-Windows.zip
+          if-no-files-found: error
+          retention-days: 14
