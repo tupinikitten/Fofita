@@ -38,43 +38,58 @@ jobs:
             $(pkg-config --cflags --libs sdl2 SDL2_image) -lm
           test -s Fofita.exe
 
-      - name: Montar pacote testavel sem ROMs
+      - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail
           mkdir -p dist/Fofita
           cp Fofita.exe dist/Fofita/
+
           for folder in ui assets labels templates cores; do
             if [ -d "$folder" ]; then cp -a "$folder" dist/Fofita/; fi
           done
-          # Empacotar DLLs MinGW/SDL2 encontradas por ldd, recursivamente.
-          # Nao incluir DLLs do Windows System32 e nao incluir ROMs.
-          queue=(Fofita.exe)
-          shopt -s nocasematch
-          while (("${#queue[@]}" > 0)); do
-            current="${queue[0]}"
-            queue=("${queue[@]:1}")
-            while IFS= read -r dll; do
-              [ -f "$dll" ] || continue
-              case "$dll" in
-                /mingw64/bin/*) ;;
-                *) continue ;;
-              esac
-              filename="${dll##*/}"
-              if [ ! -f "dist/Fofita/$filename" ]; then
-                cp "$dll" "dist/Fofita/$filename"
-                queue+=("$dll")
-              fi
-            done < <(ldd "$current" | awk '$2 == "=>" && $3 ~ /^\// {print $3}')
-          done
-          shopt -u nocasematch
-          # Se o core NES existir no repositorio, empacota sem jogos.
-          test -f dist/Fofita/Fofita.exe
-          (cd dist && zip -qr ../Fofita-Windows.zip Fofita)
 
-      - name: Publicar ZIP para download
+          # Dependencias PE/Windows (nao usar ldd: ele pode nao encontrar
+          # DLLs quando o EXE e analisado no ambiente MSYS2).
+          # Percorre tambem as dependencias das DLLs copiadas e dos cores.
+          queue=(Fofita.exe)
+          while IFS= read -r -d '' core; do
+            queue+=("$core")
+          done < <(find dist/Fofita/cores -type f -iname '*.dll' -print0 2>/dev/null || true)
+
+          index=0
+          while (( index < ${#queue[@]} )); do
+            current="${queue[$index]}"
+            index=$((index+1))
+            while IFS= read -r dll; do
+              [ -n "$dll" ] || continue
+              # Apenas bibliotecas fornecidas pelo MinGW; nunca empacotar DLLs do Windows.
+              source=$(find /mingw64/bin -maxdepth 1 -type f -iname "$dll" -print -quit)
+              if [ -n "$source" ]; then
+                name="${source##*/}"
+                if [ ! -f "dist/Fofita/$name" ]; then
+                  cp "$source" "dist/Fofita/$name"
+                  queue+=("$source")
+                  echo "Incluida dependencia: $name"
+                fi
+              fi
+            done < <(objdump -p "$current" | sed -n 's/^[[:space:]]*DLL Name: //p')
+          done
+
+          # O Fofita importa diretamente estas duas bibliotecas.
+          for dll in SDL2.dll SDL2_image.dll; do
+            test -s "dist/Fofita/$dll" || {
+              echo "::error::Biblioteca obrigatoria ausente: $dll"
+              exit 1
+            }
+          done
+          test -s dist/Fofita/Fofita.exe
+          echo "Pacote final preparado:"
+          find dist/Fofita -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Publicar pacote para download (ZIP unico)
         uses: actions/upload-artifact@v4
         with:
           name: Fofita-Windows
-          path: Fofita-Windows.zip
+          path: dist/
           if-no-files-found: error
           retention-days: 14
