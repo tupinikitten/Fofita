@@ -11,15 +11,14 @@ float proporcao_video = 0.0f;
 
 static int modo_menu_ativo = 0;
 
-/* O canvas e sempre 1920x1080. O desenho existente usa medidas 1280x720,
-   convertidas para o canvas SDL pela escala adicional de 1.5. Isso nao
-   cria um framebuffer extra: tudo continua indo direto ao renderer ativo. */
+/* O dashboard usa as coordenadas historicas 1280x720.
+   SDL_RenderSetLogicalSize calcula uma unica escala uniforme para qualquer
+   janela (720p, 1080p ou redimensionada), sem alterar o renderer manualmente.
+   Remover a escala extra evita desenhar apenas 2/3 da janela em 1080p. */
 void configurar_video_menu(void) {
     if (!renderer) return;
-    SDL_RenderSetLogicalSize(renderer, FOFITA_CANVAS_W, FOFITA_CANVAS_H);
-    float sx=1.0f, sy=1.0f;
-    SDL_RenderGetScale(renderer,&sx,&sy);
-    SDL_RenderSetScale(renderer,sx*1.5f,sy*1.5f);
+    SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+    SDL_RenderSetLogicalSize(renderer, FOFITA_UI_W, FOFITA_UI_H);
     modo_menu_ativo=1;
 }
 
