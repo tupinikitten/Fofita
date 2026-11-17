@@ -530,6 +530,29 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         return MENU_ACAO_NENHUMA;
     }
 
+    /* Acesso rapido ao menu lateral mesmo quando esta recolhido.
+       PageUp/PageDown movem o foco pela lista sem abrir a pilula.
+       Segurar PageUp ou PageDown + seta esquerda entra na lateral
+       sem mexer no console/cartucho selecionado. */
+    if (tecla == SDLK_PAGEUP || tecla == SDLK_PAGEDOWN) {
+        int passo = tecla == SDLK_PAGEUP ? -1 : 1;
+        if (foco != FOCO_SIDEBAR) {
+            foco = FOCO_SIDEBAR;
+        } else {
+            item_lateral = (item_lateral + passo + TOTAL_ACOES_LATERAIS)
+                         % TOTAL_ACOES_LATERAIS;
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+    if (tecla == SDLK_LEFT) {
+        const Uint8 *teclas = SDL_GetKeyboardState(NULL);
+        if (teclas && (teclas[SDL_SCANCODE_PAGEUP] ||
+                       teclas[SDL_SCANCODE_PAGEDOWN])) {
+            foco = FOCO_SIDEBAR;
+            return MENU_ACAO_NENHUMA;
+        }
+    }
+
     if (tecla == SDLK_TAB) {
         sidebar_aberta = !sidebar_aberta;
         foco = FOCO_SIDEBAR;
