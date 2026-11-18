@@ -256,26 +256,83 @@ static SDL_Color icone_cor(int indice) {
 }
 /* Respeita os arquivos originais de cada tema. O tema Dark inclui
    somente alguns PNGs: os demais usam o Light recolorido. */
-static SDL_Texture *carregar_icone_tingido(const char *caminho, SDL_Color cor) {
+/* Pre-filtragem por media de area: um PNG 512x512 nao deve saltar
+   diretamente para 29x29 por uma unica amostragem bilinear. Reduzimos
+   para ate 128px no carregamento, com alfa pre-multiplicado para nao
+   criar halos claros/escuros nas bordas transparentes. O renderer faz
+   apenas a reducao final (~128 -> 29) com filtro linear.
+   Executado somente ao trocar o preset, nunca a cada frame. */
+static SDL_Texture *icone_textura_suavizada(const char *caminho,
+                                          const SDL_Color *tingir) {
     SDL_Surface *orig=IMG_Load(caminho);
     if(!orig) return NULL;
-    SDL_Surface *base=SDL_ConvertSurfaceFormat(orig,SDL_PIXELFORMAT_RGBA32,0);
+    SDL_Surface *src=SDL_ConvertSurfaceFormat(orig,SDL_PIXELFORMAT_RGBA32,0);
     SDL_FreeSurface(orig);
-    if(!base) return NULL;
-    if(SDL_MUSTLOCK(base) && SDL_LockSurface(base)!=0) {
-        SDL_FreeSurface(base);
-        return NULL;
+    if(!src) return NULL;
+
+    int tw=src->w>128?128:src->w;
+    int th=src->h>128?128:src->h;
+    if(tw<=0 || th<=0) { SDL_FreeSurface(src); return NULL; }
+    SDL_Surface *dst=SDL_CreateRGBSurfaceWithFormat(0,tw,th,32,SDL_PIXELFORMAT_RGBA32);
+    if(!dst) { SDL_FreeSurface(src); return NULL; }
+    if(SDL_MUSTLOCK(src) && SDL_LockSurface(src)!=0) {
+        SDL_FreeSurface(dst); SDL_FreeSurface(src); return NULL;
     }
-    for(int y=0;y<base->h;++y) for(int x=0;x<base->w;++x) {
-        Uint32 *px=(Uint32*)((Uint8*)base->pixels+y*base->pitch+x*4);
-        Uint8 rr,gg,bb,a;
-        SDL_GetRGBA(*px,base->format,&rr,&gg,&bb,&a);
-        *px=SDL_MapRGBA(base->format,cor.r,cor.g,cor.b,a);
+    if(SDL_MUSTLOCK(dst) && SDL_LockSurface(dst)!=0) {
+        if(SDL_MUSTLOCK(src)) SDL_UnlockSurface(src);
+        SDL_FreeSurface(dst); SDL_FreeSurface(src); return NULL;
     }
-    if(SDL_MUSTLOCK(base)) SDL_UnlockSurface(base);
-    SDL_Texture *tex=SDL_CreateTextureFromSurface(renderer,base);
-    SDL_FreeSurface(base);
+
+    for(int y=0;y<th;++y) {
+        int sy0=y*src->h/th,sy1=(y+1)*src->h/th;
+        if(sy1<=sy0) sy1=sy0+1;
+        Uint32 *linha=(Uint32*)((Uint8*)dst->pixels+y*dst->pitch);
+        for(int x=0;x<tw;++x) {
+            int sx0=x*src->w/tw,sx1=(x+1)*src->w/tw;
+            if(sx1<=sx0) sx1=sx0+1;
+            unsigned long long alpha=0,ra=0,ga=0,ba=0;
+            unsigned long long count=(unsigned long long)(sx1-sx0)*(sy1-sy0);
+            for(int sy=sy0;sy<sy1;++sy) {
+                Uint32 *pixels=(Uint32*)((Uint8*)src->pixels+sy*src->pitch);
+                for(int sx=sx0;sx<sx1;++sx) {
+                    Uint8 rr,gg,bb,aa;
+                    SDL_GetRGBA(pixels[sx],src->format,&rr,&gg,&bb,&aa);
+                    alpha+=aa;
+                    if(!tingir) {
+                        ra+=(unsigned long long)rr*aa;
+                        ga+=(unsigned long long)gg*aa;
+                        ba+=(unsigned long long)bb*aa;
+                    }
+                }
+            }
+            Uint8 aa=(Uint8)((alpha+count/2)/count);
+            Uint8 rr=0,gg=0,bb=0;
+            if(tingir) {
+                rr=tingir->r; gg=tingir->g; bb=tingir->b;
+            } else if(alpha) {
+                rr=(Uint8)((ra+alpha/2)/alpha);
+                gg=(Uint8)((ga+alpha/2)/alpha);
+                bb=(Uint8)((ba+alpha/2)/alpha);
+            }
+            linha[x]=SDL_MapRGBA(dst->format,rr,gg,bb,aa);
+        }
+    }
+
+    if(SDL_MUSTLOCK(dst)) SDL_UnlockSurface(dst);
+    if(SDL_MUSTLOCK(src)) SDL_UnlockSurface(src);
+    SDL_Texture *tex=SDL_CreateTextureFromSurface(renderer,dst);
+    SDL_FreeSurface(dst);
+    SDL_FreeSurface(src);
+    if(tex) {
+        SDL_SetTextureBlendMode(tex,SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetTextureScaleMode(tex,SDL_ScaleModeLinear);
+#endif
+    }
     return tex;
+}
+static SDL_Texture *carregar_icone_tingido(const char *caminho,SDL_Color cor) {
+    return icone_textura_suavizada(caminho,&cor);
 }
 /* Os PNGs light/dark sao silhuetas com cores de origem diferentes.
    Light/Dark sempre tingem a silhueta para o tom do preset; Colorful
@@ -313,11 +370,11 @@ static void carregar_icones_preset(void) {
             const char *reserva=(i==LATERAL_CUSTOMIZACAO)?"brush":NULL;
             snprintf(caminho,sizeof(caminho),
                      "ui/styles/colorful/icons/%s_icon_colorful.png",nome);
-            icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+            icones_laterais[i]=icone_textura_suavizada(caminho,NULL);
             if(!icones_laterais[i] && reserva) {
                 snprintf(caminho,sizeof(caminho),
                          "ui/styles/colorful/icons/%s_icon_colorful.png",reserva);
-                icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
+                icones_laterais[i]=icone_textura_suavizada(caminho,NULL);
             }
             if(!icones_laterais[i])
                 icones_laterais[i]=icone_silhueta_tingida(i,"light","light");
@@ -1056,29 +1113,11 @@ static void desenhar_icone_fallback(int indice,SDL_Rect caixa,SDL_Color cor) {
 
 /* Contorno por linhas e arcos: nao depende da mascara RGBA da textura
    arredondada, que em alguns backends cobria a legenda selecionada. */
+/* O desenhador de cantos usa cobertura subpixel em uma textura RGBA,
+   evitando o serrilhado das linhas/pontos inteiros do SDL_RenderDrawPoint. */
 static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
     if(r.w<=2 || r.h<=2) return;
-    if(raio>r.h/2) raio=r.h/2;
-    if(raio>r.w/2) raio=r.w/2;
-    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,cor.a);
-    for(int stroke=0;stroke<2;++stroke) {
-        int x=r.x+stroke,y=r.y+stroke,w=r.w-2*stroke,h=r.h-2*stroke;
-        int rad=raio-stroke; if(rad<1)rad=1;
-        icone_linha(x+rad,y,x+w-1-rad,y);
-        icone_linha(x+rad,y+h-1,x+w-1-rad,y+h-1);
-        icone_linha(x,y+rad,x,y+h-1-rad);
-        icone_linha(x+w-1,y+rad,x+w-1,y+h-1-rad);
-        for(int deg=0;deg<=90;++deg) {
-            float a=deg*0.01745329252f;
-            int dx=(int)lroundf(rad*cosf(a));
-            int dy=(int)lroundf(rad*sinf(a));
-            SDL_RenderDrawPoint(renderer,x+rad-dx,y+rad-dy);
-            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+rad-dy);
-            SDL_RenderDrawPoint(renderer,x+rad-dx,y+h-1-rad+dy);
-            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+h-1-rad+dy);
-        }
-    }
+    arredondado(r,raio,cor,2);
 }
 
 static void desenhar_sidebar(int vh) {
