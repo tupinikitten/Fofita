@@ -252,7 +252,9 @@ static SDL_Color icone_cor(int indice) {
         {104,215,189,255},{248,128,157,255},{192,144,246,255},{248,168,116,255}};
     Preset p=preset_ativo();
     if(p==PRESET_COLORFUL) return cores[indice];
-    return p==PRESET_DARK ? (SDL_Color){248,249,255,255} : (SDL_Color){33,45,66,255};
+    /* Light = icones claros sobre wallpaper escuro; Dark = icones escuros. */
+    return p==PRESET_LIGHT ? (SDL_Color){248,249,255,255}
+                           : (SDL_Color){33,45,66,255};
 }
 /* Respeita os arquivos originais de cada tema. O tema Dark inclui
    somente alguns PNGs: os demais usam o Light recolorido. */
@@ -270,8 +272,10 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
     SDL_FreeSurface(orig);
     if(!src) return NULL;
 
-    int tw=src->w>128?128:src->w;
-    int th=src->h>128?128:src->h;
+    /* Area-average 512->64 preserva tracos finos melhor do que 512->128->29. */
+    int tw=src->w>64?64:src->w;
+    int th=src->h>64?64:src->h;
+    const int trofeu=strstr(caminho,"trophy_icon_")!=NULL;
     if(tw<=0 || th<=0) { SDL_FreeSurface(src); return NULL; }
     SDL_Surface *dst=SDL_CreateRGBSurfaceWithFormat(0,tw,th,32,SDL_PIXELFORMAT_RGBA32);
     if(!dst) { SDL_FreeSurface(src); return NULL; }
@@ -306,6 +310,14 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
                 }
             }
             Uint8 aa=(Uint8)((alpha+count/2)/count);
+            if(trofeu) {
+                /* Descarta particulas muito transparentes e reforca o traco. */
+                if(aa<12) aa=0;
+                else if(aa<245) {
+                    int reforcado=(int)aa*6/5+5;
+                    aa=(Uint8)(reforcado>255?255:reforcado);
+                }
+            }
             Uint8 rr=0,gg=0,bb=0;
             if(tingir) {
                 rr=tingir->r; gg=tingir->g; bb=tingir->b;
@@ -334,70 +346,38 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
 static SDL_Texture *carregar_icone_tingido(const char *caminho,SDL_Color cor) {
     return icone_textura_suavizada(caminho,&cor);
 }
-/* Os PNGs light/dark sao silhuetas com cores de origem diferentes.
-   Light/Dark sempre tingem a silhueta para o tom do preset; Colorful
-   preserva o PNG colorido. */
-static SDL_Texture *icone_silhueta_tingida(int i, const char *pasta, const char *sufixo) {
-    char caminho[256];
-    const char *nome=nomes_arquivos[i];
-    const char *reserva=(i==LATERAL_CUSTOMIZACAO)?"brush":NULL;
-    snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",pasta,nome,sufixo);
-    SDL_Texture *t=carregar_icone_tingido(caminho,icone_cor(i));
-    if(!t && reserva) {
-        snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",pasta,reserva,sufixo);
-        t=carregar_icone_tingido(caminho,icone_cor(i));
-    }
-    if(!t) {
-        snprintf(caminho,sizeof(caminho),"ui/styles/light/icons/%s_icon_light.png",nome);
-        t=carregar_icone_tingido(caminho,icone_cor(i));
-        if(!t && reserva) {
-            snprintf(caminho,sizeof(caminho),"ui/styles/light/icons/%s_icon_light.png",reserva);
-            t=carregar_icone_tingido(caminho,icone_cor(i));
-        }
-    }
-    return t;
-}
+/* Caminho canonico por preset: sem imagens antigas nem fallback cruzado. */
 static void carregar_icones_preset(void) {
-    char caminho[256];
     const Preset preset=preset_ativo();
+    const char *pasta=preset==PRESET_LIGHT?"light":
+                      preset==PRESET_DARK?"dark":"colorful";
     for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
         if(icones_laterais[i]) {
             SDL_DestroyTexture(icones_laterais[i]);
             icones_laterais[i]=NULL;
         }
-        if(preset==PRESET_COLORFUL) {
-            const char *nome=nomes_arquivos[i];
-            const char *reserva=(i==LATERAL_CUSTOMIZACAO)?"brush":NULL;
-            snprintf(caminho,sizeof(caminho),
-                     "ui/styles/colorful/icons/%s_icon_colorful.png",nome);
+        char caminho[256];
+        snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",
+                 pasta,nomes_arquivos[i],pasta);
+        if(preset==PRESET_COLORFUL)
             icones_laterais[i]=icone_textura_suavizada(caminho,NULL);
-            if(!icones_laterais[i] && reserva) {
-                snprintf(caminho,sizeof(caminho),
-                         "ui/styles/colorful/icons/%s_icon_colorful.png",reserva);
-                icones_laterais[i]=icone_textura_suavizada(caminho,NULL);
-            }
-            if(!icones_laterais[i])
-                icones_laterais[i]=icone_silhueta_tingida(i,"light","light");
-        } else if(preset==PRESET_DARK) {
-            icones_laterais[i]=icone_silhueta_tingida(i,"dark","dark");
-        } else {
-            icones_laterais[i]=icone_silhueta_tingida(i,"light","light");
-        }
-        if(icones_laterais[i])
-            SDL_SetTextureBlendMode(icones_laterais[i],SDL_BLENDMODE_BLEND);
+        else
+            icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
+        if(!icones_laterais[i])
+            fprintf(stderr,"Fofita: icone de estilo ausente: %s\n",caminho);
     }
 }
 /* Cores de texto coerentes com o preset, sem alterar wallpaper. */
 static SDL_Color cor_texto_ui(void) {
-    return preset_ativo()!=PRESET_DARK ? (SDL_Color){32,45,68,255}
+    return preset_ativo()!=PRESET_LIGHT ? (SDL_Color){32,45,68,255}
                                        : (SDL_Color){245,248,255,255};
 }
 static SDL_Color cor_texto_suave_ui(void) {
-    return preset_ativo()!=PRESET_DARK ? (SDL_Color){62,78,120,255}
+    return preset_ativo()!=PRESET_LIGHT ? (SDL_Color){62,78,120,255}
                                        : (SDL_Color){176,190,225,255};
 }
 static SDL_Color cor_sombra_ui(void) {
-    return preset_ativo()!=PRESET_DARK ? (SDL_Color){255,255,255,170}
+    return preset_ativo()!=PRESET_LIGHT ? (SDL_Color){255,255,255,170}
                                        : (SDL_Color){0,0,0,120};
 }
 static int extensao_imagem(const char *nome) {
@@ -443,8 +423,9 @@ static void avaliar_contraste_wallpaper(void) {
     if(!n) {auto_preset=PRESET_DARK;return;}
     double lum=soma/n;
     /* Histerese evita oscilacao em fundos proximo do limiar. */
-    if(lum>155) auto_preset=PRESET_LIGHT;
-    else if(lum<122) auto_preset=PRESET_DARK;
+    /* Papel escuro -> icones claros (Light). Papel claro -> icones escuros (Dark). */
+    if(lum>155) auto_preset=PRESET_DARK;
+    else if(lum<122) auto_preset=PRESET_LIGHT;
 }
 static void atualizar_wallpaper(const char *caminho,int persistir) {
     SDL_Texture *novo=IMG_LoadTexture(renderer,caminho);
@@ -894,7 +875,7 @@ static void desenhar_relogio(int vw) {
         pct=(int)energia.BatteryLifePercent;
 #endif
     SDL_Rect area={vw-(pct>=0?192:128),14,pct>=0?176:112,39};
-    int claro=preset_ativo()!=PRESET_DARK;
+    int claro=preset_ativo()!=PRESET_LIGHT;
     SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){246,247,255,255};
     desenhar_capsula(area,claro?(SDL_Color){232,245,255,193}:(SDL_Color){22,34,75,191},
                      claro?(SDL_Color){255,255,255,200}:(SDL_Color){192,213,251,98});
@@ -1128,10 +1109,10 @@ static void desenhar_sidebar(int vh) {
     /* Vidro suave: preserva mais wallpaper do que a lateral anterior. */
     arredondado((SDL_Rect){painel.x+2,painel.y+3,painel.w,painel.h},
                 painel.w/2,(SDL_Color){12,23,45,22},0);
-    SDL_Color vidro = preset==PRESET_DARK
-        ? (SDL_Color){25,37,73,128}
-        : (SDL_Color){221,238,251,120};
-    SDL_Color borda = preset==PRESET_DARK
+    SDL_Color vidro = preset==PRESET_LIGHT
+        ? (SDL_Color){25,37,73,142}
+        : (SDL_Color){221,238,251,148};
+    SDL_Color borda = preset==PRESET_LIGHT
         ? (SDL_Color){218,231,255,100}
         : (SDL_Color){255,255,255,153};
     desenhar_capsula(painel,vidro,borda);
@@ -1142,13 +1123,13 @@ static void desenhar_sidebar(int vh) {
         if(i==LATERAL_SAIR)
             preencher((SDL_Rect){painel.x+15,cy-h_item/2-4,
                                   painel.w-30,1},
-                     preset==PRESET_DARK ? (SDL_Color){228,235,255,82}
-                                        : (SDL_Color){43,65,92,76});
+                     preset==PRESET_LIGHT ? (SDL_Color){228,235,255,82}
+                                         : (SDL_Color){43,65,92,76});
         if(item_lateral==i) {
             SDL_Color destaque = preset==PRESET_COLORFUL
                 ? (SDL_Color){0xC8,0x46,0x82,240}
                 : (SDL_Color){cor.r,cor.g,cor.b,235};
-            arredondado(item,16,(SDL_Color){255,255,255,18},0);
+            /* Moldura sem preenchimento para nao escurecer os icones. */
             contorno_selecao(item,16,destaque);
         }
         /* Compensa levemente as margens transparentes dos PNGs originais:
@@ -1238,7 +1219,7 @@ void ui_menu_desenhar(void) {
     } else if(tela_configuracoes || tela_aparencia) {
         const int custom=tela_aparencia;
         const int n=custom?6:2;
-        const int claro=preset_ativo()!=PRESET_DARK;
+        const int claro=preset_ativo()!=PRESET_LIGHT;
         SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
         SDL_Color fundo=claro?(SDL_Color){236,246,255,255}:(SDL_Color){22,35,72,255};
         SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
@@ -1275,8 +1256,12 @@ void ui_menu_desenhar(void) {
             }
             SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,painel.w-22,altura_linha-6};
             if((custom?opcao_aparencia:opcao_configuracoes)==i) {
-                arredondado(linha,14,claro?(SDL_Color){255,255,255,130}:(SDL_Color){108,142,210,76},0);
-                contorno_selecao(linha,14,(SDL_Color){tinta.r,tinta.g,tinta.b,215});
+                /* Sem camada escura atras da legenda selecionada. */
+                SDL_Color borda_ativa=preset_ativo()==PRESET_COLORFUL
+                    ? (SDL_Color){0xC8,0x46,0x82,235}
+                    : claro ? (SDL_Color){38,68,116,225}
+                            : (SDL_Color){207,220,255,230};
+                contorno_selecao(linha,14,borda_ativa);
             }
             ui_texto_desenhar(nome,linha.x+11,linha.y+10,1,tinta,(SDL_Color){0,0,0,0});
         }
