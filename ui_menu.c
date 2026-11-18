@@ -295,6 +295,29 @@ static SDL_Texture *carregar_icone_tingido(const char *caminho, SDL_Color cor) {
     SDL_FreeSurface(base);
     return tex;
 }
+/* Os PNGs light/dark sao silhuetas com cores de origem diferentes.
+   Light/Dark sempre tingem a silhueta para o tom do preset; Colorful
+   preserva o PNG colorido. */
+static SDL_Texture *icone_silhueta_tingida(int i, const char *pasta, const char *sufixo) {
+    char caminho[256];
+    const char *nome=nomes_arquivos[i];
+    const char *reserva=(i==LATERAL_CUSTOMIZACAO)?"brush":NULL;
+    snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",pasta,nome,sufixo);
+    SDL_Texture *t=carregar_icone_tingido(caminho,icone_cor(i));
+    if(!t && reserva) {
+        snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",pasta,reserva,sufixo);
+        t=carregar_icone_tingido(caminho,icone_cor(i));
+    }
+    if(!t) {
+        snprintf(caminho,sizeof(caminho),"ui/styles/light/icons/%s_icon_light.png",nome);
+        t=carregar_icone_tingido(caminho,icone_cor(i));
+        if(!t && reserva) {
+            snprintf(caminho,sizeof(caminho),"ui/styles/light/icons/%s_icon_light.png",reserva);
+            t=carregar_icone_tingido(caminho,icone_cor(i));
+        }
+    }
+    return t;
+}
 static void carregar_icones_preset(void) {
     char caminho[256];
     const Preset preset=preset_ativo();
@@ -303,50 +326,40 @@ static void carregar_icones_preset(void) {
             SDL_DestroyTexture(icones_laterais[i]);
             icones_laterais[i]=NULL;
         }
-        /* Balde substitui intencionalmente o pincel nos presets novos. */
-        const char *nome_primario=nomes_arquivos[i];
-        const char *nome_reserva=(i==LATERAL_CUSTOMIZACAO)?"brush":NULL;
-        if(!icones_laterais[i] && preset==PRESET_COLORFUL) {
+        if(preset==PRESET_COLORFUL) {
+            const char *nome=nomes_arquivos[i];
+            const char *reserva=(i==LATERAL_CUSTOMIZACAO)?"brush":NULL;
             snprintf(caminho,sizeof(caminho),
-                     "ui/styles/colorful/icons/%s_icon_colorful.png",nome_primario);
+                     "ui/styles/colorful/icons/%s_icon_colorful.png",nome);
             icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
-            if(!icones_laterais[i] && nome_reserva) {
+            if(!icones_laterais[i] && reserva) {
                 snprintf(caminho,sizeof(caminho),
-                         "ui/styles/colorful/icons/%s_icon_colorful.png",nome_reserva);
+                         "ui/styles/colorful/icons/%s_icon_colorful.png",reserva);
                 icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
             }
-        } else if(!icones_laterais[i] && preset==PRESET_DARK) {
-            snprintf(caminho,sizeof(caminho),
-                     "ui/styles/dark/icons/%s_icon_dark.png",nome_primario);
-            icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
-            if(!icones_laterais[i] && nome_reserva) {
-                snprintf(caminho,sizeof(caminho),
-                         "ui/styles/dark/icons/%s_icon_dark.png",nome_reserva);
-                icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
-            }
-            if(!icones_laterais[i]) {
-                snprintf(caminho,sizeof(caminho),
-                         "ui/styles/light/icons/%s_icon_light.png",nome_primario);
-                icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
-            }
-            if(!icones_laterais[i] && nome_reserva) {
-                snprintf(caminho,sizeof(caminho),
-                         "ui/styles/light/icons/%s_icon_light.png",nome_reserva);
-                icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
-            }
-        } else if(!icones_laterais[i]) {
-            snprintf(caminho,sizeof(caminho),
-                     "ui/styles/light/icons/%s_icon_light.png",nome_primario);
-            icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
-            if(!icones_laterais[i] && nome_reserva) {
-                snprintf(caminho,sizeof(caminho),
-                         "ui/styles/light/icons/%s_icon_light.png",nome_reserva);
-                icones_laterais[i]=IMG_LoadTexture(renderer,caminho);
-            }
+            if(!icones_laterais[i])
+                icones_laterais[i]=icone_silhueta_tingida(i,"light","light");
+        } else if(preset==PRESET_DARK) {
+            icones_laterais[i]=icone_silhueta_tingida(i,"dark","dark");
+        } else {
+            icones_laterais[i]=icone_silhueta_tingida(i,"light","light");
         }
         if(icones_laterais[i])
             SDL_SetTextureBlendMode(icones_laterais[i],SDL_BLENDMODE_BLEND);
     }
+}
+/* Cores de texto coerentes com o preset, sem alterar wallpaper. */
+static SDL_Color cor_texto_ui(void) {
+    return preset_ativo()!=PRESET_DARK ? (SDL_Color){32,45,68,255}
+                                       : (SDL_Color){245,248,255,255};
+}
+static SDL_Color cor_texto_suave_ui(void) {
+    return preset_ativo()!=PRESET_DARK ? (SDL_Color){62,78,120,255}
+                                       : (SDL_Color){176,190,225,255};
+}
+static SDL_Color cor_sombra_ui(void) {
+    return preset_ativo()!=PRESET_DARK ? (SDL_Color){255,255,255,170}
+                                       : (SDL_Color){0,0,0,120};
 }
 static int extensao_imagem(const char *nome) {
     const char *p=strrchr(nome,'.');
@@ -649,8 +662,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
         if(pw>vw-42) pw=vw-42;
         int ph=custom?330:178;
         if(ph>vh-46) ph=vh-46;
-        int x=sidebar_aberta?SIDEBAR_ABERTA+20:SIDEBAR_RECOLHIDA+20;
-        if(x+pw>vw-16) x=vw-pw-16;
+        int x=(vw-pw)/2;
         int y=(vh-ph)/2;
         if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*(custom?48:45)) {
             int item=(my-y-59)/(custom?48:45);
@@ -844,9 +856,9 @@ static void desenhar_relogio(int vw) {
     ui_texto_desenhar(horario,area.x+17,area.y+9,1,tinta,(SDL_Color){0,0,0,0});
     if(pct>=0) {
         SDL_Rect corpo={area.x+90,area.y+13,26,13};
-        arredondado(corpo,3,(SDL_Color){245,248,250,230},1);
-        preencher((SDL_Rect){corpo.x+26,corpo.y+4,2,5},(SDL_Color){255,255,255,215});
-        preencher((SDL_Rect){corpo.x+2,corpo.y+2,22*pct/100,9},(SDL_Color){160,229,197,240});
+        arredondado(corpo,3,(SDL_Color){tinta.r,tinta.g,tinta.b,230},1);
+        preencher((SDL_Rect){corpo.x+26,corpo.y+4,2,5},(SDL_Color){tinta.r,tinta.g,tinta.b,215});
+        preencher((SDL_Rect){corpo.x+2,corpo.y+2,22*pct/100,9},(SDL_Color){110,210,160,240});
         char valor[16]; snprintf(valor,sizeof(valor),"%d%%",pct);
         ui_texto_desenhar(valor,area.x+126,area.y+9,1,tinta,(SDL_Color){0,0,0,0});
     }
@@ -884,27 +896,38 @@ static void desenhar_atalhos(int vw,int vh) {
     const SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){245,247,255,255};
     const SDL_Color rosa_rodape={0xC8,0x46,0x82,255};
     const SDL_Color cor_bolha=preset==PRESET_COLORFUL ? rosa_rodape : tinta;
+    const SDL_Color cor_letra=(preset==PRESET_COLORFUL||claro)
+        ? (SDL_Color){255,255,255,255} : (SDL_Color){20,30,55,255};
     const SDL_Color fundo=claro?(SDL_Color){242,249,255,208}:(SDL_Color){23,34,74,208};
     const SDL_Color borda=claro?(SDL_Color){255,255,255,210}:(SDL_Color){202,218,255,110};
-    const int largura=98,altura=30,espaco=9,margem=16;
-    const int x_inicio=vw-(3*largura+2*espaco)-margem;
+    const int altura=30,espaco=9,margem=16,bolha_h=20;
     const int y=vh-altura-12;
 
+    int bolha_w[3],cap_w[3],total=0;
     for(int i=0;i<3;++i) {
-        int x=x_inicio+i*(largura+espaco);
-        SDL_Rect capsula={x,y,largura,altura};
-        /* Sombra de baixo contraste, separada do fundo translúcido. */
-        arredondado((SDL_Rect){x+1,y+2,largura,altura},altura/2,
+        int tw=ui_texto_largura(letras[i],1);
+        bolha_w[i]=tw+12; if(bolha_w[i]<bolha_h) bolha_w[i]=bolha_h;
+        int lw=ui_texto_largura(acoes[i],1);
+        cap_w[i]=5+bolha_w[i]+7+lw+9;
+        if(cap_w[i]<86) cap_w[i]=86;
+        total+=cap_w[i];
+    }
+    total+=2*espaco;
+    int x=vw-total-margem;
+
+    for(int i=0;i<3;++i) {
+        SDL_Rect capsula={x,y,cap_w[i],altura};
+        arredondado((SDL_Rect){x+1,y+2,cap_w[i],altura},altura/2,
                     (SDL_Color){18,30,56,claro?28:60},0);
         desenhar_capsula(capsula,fundo,borda);
-        SDL_Rect bolha={x+5,y+5,20,20};
+        SDL_Rect bolha={x+5,y+(altura-bolha_h)/2,bolha_w[i],bolha_h};
         desenhar_capsula(bolha,cor_bolha,cor_bolha);
         ui_texto_desenhar_centro(letras[i],bolha.x+bolha.w/2,
                                 bolha.y+(bolha.h-ui_texto_altura(1))/2,
-                                1,(SDL_Color){255,255,255,255},
-                                (SDL_Color){0,0,0,0});
-        ui_texto_desenhar(acoes[i],x+31,y+(altura-ui_texto_altura(1))/2,
-                         1,tinta,(SDL_Color){0,0,0,0});
+                                1,cor_letra,(SDL_Color){0,0,0,0});
+        ui_texto_desenhar(acoes[i],x+5+bolha_w[i]+7,
+                         y+(altura-ui_texto_altura(1))/2,1,tinta,(SDL_Color){0,0,0,0});
+        x+=cap_w[i]+espaco;
     }
 }
 
@@ -957,13 +980,12 @@ static void desenhar_encaixado(SDL_Texture *tex, int w, int h, SDL_Rect caixa, U
 
 static void desenhar_cabecalho(int x_area, int largura_area) {
     int vw = largura_area;
-    const UiTema *tema = ui_tema_atual();
 
     if (total_visiveis == 0) {
         ui_texto_desenhar_centro("Nenhum console ativo", x_area + vw / 2, 30, 2,
-                                 tema->texto, tema->texto_sombra);
+                                 cor_texto_ui(), cor_sombra_ui());
         ui_texto_desenhar_centro("Confira a pasta cores/", x_area + vw / 2, 52, 2,
-                                 tema->texto_suave, tema->texto_sombra);
+                                 cor_texto_suave_ui(), cor_sombra_ui());
         return;
     }
 
@@ -1006,7 +1028,7 @@ static void desenhar_cabecalho(int x_area, int largura_area) {
                 if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
             ui_texto_desenhar_centro(sigla, slot.x + slot.w / 2,
                                      slot.y + (slot.h - ui_texto_altura(2)) / 2, 2,
-                                     tema->texto, tema->texto_sombra);
+                                     cor_texto_ui(), cor_sombra_ui());
         }
 
         /* Nome curto (id em maiusculas) embaixo de cada icone; o selecionado ganha destaque. */
@@ -1015,13 +1037,12 @@ static void desenhar_cabecalho(int x_area, int largura_area) {
         for (char *c = rotulo; *c; ++c)
             if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
         ui_texto_desenhar_centro(rotulo, slot.x + slot.w / 2, y0 + SLOT_H + 4, 2,
-                                 selecionado ? tema->texto : tema->texto_suave,
-                                 selecionado ? tema->texto_sombra : (SDL_Color){ 0, 0, 0, 0 });
+                                 selecionado ? cor_texto_ui() : cor_texto_suave_ui(),
+                                 selecionado ? cor_sombra_ui() : (SDL_Color){ 0, 0, 0, 0 });
     }
 }
 
 static void desenhar_linha_titulo(int x_area, int vw, int y) {
-    const UiTema *tema = ui_tema_atual();
 
     if (carousel_total_visiveis() == 0) return;
 
@@ -1030,7 +1051,7 @@ static void desenhar_linha_titulo(int x_area, int vw, int y) {
 
     int max_texto = vw - 2 * (SETA_TAM + 36);
     ui_texto_ajustar(bruto, max_texto, 2, nome, sizeof(nome));
-    ui_texto_desenhar_centro(nome, x_area + vw / 2, y - 15, 2, tema->texto, tema->texto_sombra);
+    ui_texto_desenhar_centro(nome, x_area + vw / 2, y - 15, 2, cor_texto_ui(), cor_sombra_ui());
 
     if (carousel_total_visiveis() > 1) {
         int meio = ui_texto_largura(nome, 2) / 2;
@@ -1218,10 +1239,10 @@ void ui_menu_desenhar(void) {
             snprintf(pasta, sizeof(pasta), "Coloque as ROMs em %s/", console_selecionado()->pasta_roms);
             ui_texto_desenhar_centro("Nenhuma ROM encontrada", x_area + largura_area / 2,
                                      area.y + area.h / 2 - 20, 2,
-                                     tema->texto, tema->texto_sombra);
+                                     cor_texto_ui(), cor_sombra_ui());
             ui_texto_desenhar_centro(pasta, x_area + largura_area / 2,
                                      area.y + area.h / 2 + 4, 2,
-                                     tema->texto_suave, tema->texto_sombra);
+                                     cor_texto_suave_ui(), cor_sombra_ui());
         }
     }
 
@@ -1260,16 +1281,15 @@ void ui_menu_desenhar(void) {
         const int n=custom?5:2;
         const int claro=preset_ativo()!=PRESET_DARK;
         SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
-        SDL_Color fundo=claro?(SDL_Color){225,239,251,233}:(SDL_Color){22,35,72,233};
+        SDL_Color fundo=claro?(SDL_Color){236,246,255,255}:(SDL_Color){22,35,72,255};
         SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
         int pw=custom?360:340;
         if(pw>vw-42) pw=vw-42;
         int ph=custom?330:178;
         if(ph>vh-46) ph=vh-46;
-        /* Posicionado ao lado do menu, evitando o cartucho central. */
-        int painel_x=sidebar_aberta?SIDEBAR_ABERTA+20:SIDEBAR_RECOLHIDA+20;
-        if(painel_x+pw>vw-16) painel_x=vw-pw-16;
-        SDL_Rect painel={painel_x,(vh-ph)/2,pw,ph};
+        /* Modal centralizado com veu de fundo; nao depende da lateral. */
+        SDL_Rect painel={(vw-pw)/2,(vh-ph)/2,pw,ph};
+        preencher((SDL_Rect){0,0,vw,vh},(SDL_Color){8,12,24,claro?70:120});
         arredondado((SDL_Rect){painel.x+3,painel.y+5,painel.w,painel.h},25,
                     (SDL_Color){10,24,46,35},0);
         arredondado(painel,25,fundo,0);
