@@ -1112,8 +1112,13 @@ static void desenhar_sidebar(int vh) {
             arredondado(item,16,(SDL_Color){255,255,255,18},0);
             contorno_selecao(item,16,destaque);
         }
-        SDL_Rect icone={painel.x+(painel.w-SIDEBAR_ICON)/2,
-                        cy-SIDEBAR_ICON/2,SIDEBAR_ICON,SIDEBAR_ICON};
+        /* Compensa levemente as margens transparentes dos PNGs originais:
+           trofeu e coracao tem silhouette menor que filtro/configuracoes. */
+        int lado=SIDEBAR_ICON;
+        if(i==LATERAL_CONQUISTAS) lado+=3;
+        else if(i==LATERAL_FAVORITOS) lado+=1;
+        SDL_Rect icone={painel.x+(painel.w-lado)/2,
+                        cy-lado/2,lado,lado};
         if(icones_laterais[i]) {
             int tw=0,th=0;
             SDL_QueryTexture(icones_laterais[i],NULL,NULL,&tw,&th);
