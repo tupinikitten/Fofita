@@ -4,17 +4,13 @@
 #include <SDL2/SDL.h>
 
 /*
- * Tudo que muda a aparencia do menu fica aqui, e nao espalhado pelo codigo:
- * o papel de parede, a pasta do estilo de icones e as cores.
- *
- * Estrutura de assets (preparada para novos estilos e wallpapers):
- *   ui/wallpapers/<arquivo>        papeis de parede (jpg/png)
- *   ui/consoles/<id>_icon.png      icones dos consoles (coloridos, valem p/ todos os estilos)
- *   ui/styles/<estilo>/arrows/    setas
- *   ui/styles/<estilo>/icons/     icones da barra lateral (trofeu, engrenagem, ...)
- * Hoje existe so o estilo "escuro" (icones pretos, para fundos claros). Um estilo
- * "claro" ou "colorido" e uma nova pasta em ui/styles com os mesmos nomes
- * de arquivo, mais uma entrada nova na lista de temas em ui_theme.c.
+ * Tema-base para cores e wallpaper de fallback.
+ * O preset de icones e independente do wallpaper, selecionado em ui_menu.c:
+ *   ui/styles/light/icons/*_icon_light.png    (claros, fundos escuros)
+ *   ui/styles/dark/icons/*_icon_dark.png      (escuros, fundos claros)
+ *   ui/styles/colorful/icons/*_icon_colorful.png
+ * As setas seguem o contraste ativo. Para a estrutura de assets,
+ * consulte ui/styles/README.md.
  */
 typedef struct {
     const char *nome;
