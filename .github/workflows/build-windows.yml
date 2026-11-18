@@ -54,12 +54,21 @@ jobs:
           mkdir -p dist/Fofita/roms/nes
           printf 'Coloque suas ROMs .nes nesta pasta para testa-las.\n' > dist/Fofita/roms/nes/LEIA-ME.txt
 
-          # Relatorio de recursos: os icones ausentes usam desenho vetorial SDL2.
-          for name in trophy settings filter heart bucket out; do
-            if [ ! -f "dist/Fofita/ui/styles/light/icons/${name}_icon_light.png" ]; then
-              echo "Icone nao versionado: $name; fallback SDL2 sera usado."
-            fi
+          # Nao publicar arquivos de estilo antigos nem presets incompletos.
+          # Os 18 PNGs canonicos sao obrigatorios neste pacote.
+          for preset in light dark colorful; do
+            for name in trophy settings filter heart bucket out; do
+              file="dist/Fofita/ui/styles/$preset/icons/${name}_icon_$preset.png"
+              if [ ! -s "$file" ]; then
+                echo "::error::Icone obrigatorio nao encontrado: $file"
+                exit 1
+              fi
+            done
           done
+          while IFS= read -r antigo; do
+            echo "::error::Arquivo legado de icone no pacote: $antigo"
+            exit 1
+          done < <(find dist/Fofita/ui/styles -path '*/icons/*_icon.png' -type f)
 
           # Dependencias PE/Windows (nao usar ldd: ele pode nao encontrar
           # DLLs quando o EXE e analisado no ambiente MSYS2).
