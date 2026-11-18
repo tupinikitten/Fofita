@@ -153,6 +153,9 @@ static void carregar_config(void) {
         else if (strncmp(linha,"icon_manual=",12)==0) {
             int v=atoi(linha+12);
             if(v>=0 && v<=2) manual_preset=(Preset)v;
+        } else if (strncmp(linha,"game_view=",10)==0) {
+            ui_game_view_set(strcmp(linha+10,"card")==0
+                             ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
         }
     }
 
@@ -167,6 +170,7 @@ static void salvar_config(void) {
         fprintf(f, "oculto=%s\n", ocultos[i]);
     fprintf(f,"wallpaper=%s\nicon_auto=%d\nicon_manual=%d\n",
             wallpaper_path,contraste_automatico,(int)manual_preset);
+    fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
 
     fclose(f);
 }
@@ -495,22 +499,40 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     }
     if (tela_aparencia) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
-        else if(tecla==SDLK_UP) opcao_aparencia=(opcao_aparencia+4)%5;
-        else if(tecla==SDLK_DOWN) opcao_aparencia=(opcao_aparencia+1)%5;
+        else if(tecla==SDLK_UP) opcao_aparencia=(opcao_aparencia+5)%6;
+        else if(tecla==SDLK_DOWN) opcao_aparencia=(opcao_aparencia+1)%6;
         else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if(opcao_aparencia==0) contraste_automatico=!contraste_automatico;
-            if(opcao_aparencia==1) {contraste_automatico=0; manual_preset=(Preset)((manual_preset+1)%3);}
-            if(opcao_aparencia==2) {
-                listar_wallpapers(); preview_indice=wallpaper_indice;
+            switch(opcao_aparencia) {
+            case 0:
+                contraste_automatico=!contraste_automatico;
+                break;
+            case 1:
+                contraste_automatico=0;
+                manual_preset=(Preset)((manual_preset+1)%3);
+                break;
+            case 2:
+                ui_game_view_set(ui_game_view_get()==GAME_VIEW_CARTRIDGE
+                                  ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
+                break;
+            case 3:
+                listar_wallpapers();
+                preview_indice=wallpaper_indice;
                 preview_custom_path[0]='\0';
                 if(preview_textura) SDL_DestroyTexture(preview_textura);
-                preview_textura=total_wallpapers?IMG_LoadTexture(renderer,wallpapers[preview_indice]):NULL;
+                preview_textura=total_wallpapers
+                    ? IMG_LoadTexture(renderer,wallpapers[preview_indice]) : NULL;
                 if(total_wallpapers) tela_previa_wallpaper=1;
                 else ui_menu_aviso("Nenhum wallpaper disponivel");
+                break;
+            case 4:
+                atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1);
+                break;
+            case 5:
+                tela_aparencia=0;
+                break;
             }
-            if(opcao_aparencia==3) atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1);
-            if(opcao_aparencia==4) tela_aparencia=0;
-            carregar_icones_preset(); salvar_config();
+            carregar_icones_preset();
+            salvar_config();
         }
         return MENU_ACAO_NENHUMA;
     }
@@ -634,23 +656,23 @@ MenuAcao ui_menu_clique(int mx,int my) {
     if(tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
     if(tela_aparencia || tela_configuracoes) {
         int custom=tela_aparencia;
-        int n=custom?5:2;
+        int n=custom?6:2;
         int pw=custom?360:340;
         if(pw>vw-42) pw=vw-42;
-        int ph=custom?330:178;
+        int ph=custom?390:178;
         if(ph>vh-46) ph=vh-46;
         int x=(vw-pw)/2;
         int y=(vh-ph)/2;
-        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*(custom?48:45)) {
-            int item=(my-y-59)/(custom?48:45);
+        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*(custom?50:45)) {
+            int item=(my-y-59)/(custom?50:45);
             if(custom) opcao_aparencia=item;
             else opcao_configuracoes=item;
             return ui_menu_tecla(SDLK_RETURN,0);
         }
         return MENU_ACAO_NENHUMA;
     }
-    SDL_Rect painel_sidebar; int lista_y=0, h_item_sidebar=0, aberta_sidebar=0;
-    obter_geometria_sidebar(vh,&painel_sidebar,&lista_y,&h_item_sidebar,&aberta_sidebar);
+    SDL_Rect painel_sidebar; int lista_y=0, h_item_sidebar=0;
+    obter_geometria_sidebar(vh,&painel_sidebar,&lista_y,&h_item_sidebar,NULL);
     if(mx>=painel_sidebar.x && mx<painel_sidebar.x+painel_sidebar.w &&
        my>=painel_sidebar.y && my<painel_sidebar.y+painel_sidebar.h) {
         for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
@@ -1062,8 +1084,8 @@ static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
 static void desenhar_sidebar(int vh) {
     const Preset preset=preset_ativo();
     SDL_Rect painel;
-    int lista_y=0,h_item=0,aberta=0;
-    obter_geometria_sidebar(vh,&painel,&lista_y,&h_item,&aberta);
+    int lista_y=0,h_item=0;
+    obter_geometria_sidebar(vh,&painel,&lista_y,&h_item,NULL);
     /* Vidro suave: preserva mais wallpaper do que a lateral anterior. */
     arredondado((SDL_Rect){painel.x+2,painel.y+3,painel.w,painel.h},
                 painel.w/2,(SDL_Color){12,23,45,22},0);
@@ -1171,14 +1193,14 @@ void ui_menu_desenhar(void) {
         ui_texto_desenhar_centro("ENTER Aplicar   ESC Cancelar",vw/2,caixa.y+284,1,(SDL_Color){220,225,235,255},(SDL_Color){0,0,0,0});
     } else if(tela_configuracoes || tela_aparencia) {
         const int custom=tela_aparencia;
-        const int n=custom?5:2;
+        const int n=custom?6:2;
         const int claro=preset_ativo()!=PRESET_DARK;
         SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
         SDL_Color fundo=claro?(SDL_Color){236,246,255,255}:(SDL_Color){22,35,72,255};
         SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
         int pw=custom?360:340;
         if(pw>vw-42) pw=vw-42;
-        int ph=custom?330:178;
+        int ph=custom?390:178;
         if(ph>vh-46) ph=vh-46;
         /* Modal centralizado com veu de fundo; nao depende da lateral. */
         SDL_Rect painel={(vw-pw)/2,(vh-ph)/2,pw,ph};
@@ -1189,15 +1211,19 @@ void ui_menu_desenhar(void) {
         arredondado(painel,25,borda,1);
         ui_texto_desenhar(custom?"APARÊNCIA":"CONFIGURAÇÕES",painel.x+20,
                           painel.y+17,2,tinta,(SDL_Color){0,0,0,0});
-        int altura_linha=custom?48:45;
+        int altura_linha=custom?50:45;
         for(int i=0;i<n;++i) {
             char nome[150];
             if(custom) {
                 switch(i) {
                 case 0: snprintf(nome,sizeof(nome),"Contraste automático: %s",contraste_automatico?"Ligado":"Desligado"); break;
                 case 1: snprintf(nome,sizeof(nome),"Preset manual: %s",nomes_presets[manual_preset]); break;
-                case 2: snprintf(nome,sizeof(nome),"Escolher wallpaper"); break;
-                case 3: snprintf(nome,sizeof(nome),"Restaurar wallpaper padrão"); break;
+                case 2:
+                    snprintf(nome,sizeof(nome),"Visualização: %s",
+                             ui_game_view_get()==GAME_VIEW_CARD?"Cards":"Cartuchos");
+                    break;
+                case 3: snprintf(nome,sizeof(nome),"Escolher wallpaper"); break;
+                case 4: snprintf(nome,sizeof(nome),"Restaurar wallpaper padrão"); break;
                 default: snprintf(nome,sizeof(nome),"Voltar");
                 }
             } else {
