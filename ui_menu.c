@@ -2,6 +2,7 @@
 #include "ui_text.h"
 #include "ui_theme.h"
 #include "ui_carousel.h"
+#include "ui_game_view.h"
 #include "video_audio.h"
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
@@ -30,10 +31,8 @@
 #define ICONE_MAX_H 54
 #define SETA_TAM 24
 #define SIDEBAR_RECOLHIDA 78
-#define SIDEBAR_ABERTA 266
-#define SIDEBAR_ITEM_H 56
-#define SIDEBAR_TOPO 94
-#define SIDEBAR_ICON 26
+#define SIDEBAR_ITEM_H 54
+#define SIDEBAR_ICON 29
 #define TOTAL_ACOES_LATERAIS 6
 
 typedef enum { FOCO_CABECALHO, FOCO_CARROSSEL, FOCO_SAIR, FOCO_SIDEBAR } Foco;
@@ -86,10 +85,6 @@ static SDL_Texture *preview_textura = NULL;
 static char preview_custom_path[1024] = "";
 static Uint32 animacao_slot_inicio = 0;
 
-static const char *const nomes_laterais[TOTAL_ACOES_LATERAIS] = {
-    "Conquistas", "Configurações", "Filtros", "Favoritos", "Aparência", "Sair"
-};
-static int sidebar_aberta = 0;
 static int item_lateral = LATERAL_CONFIGURACOES;
 static int tela_configuracoes = 0;
 static int opcao_configuracoes = 0;
@@ -100,41 +95,24 @@ static char aviso[128] = "";
 static Uint32 aviso_ate = 0;
 static void limpar_cache_arredondado(void);
 
-static void obter_geometria_sidebar(int vh, SDL_Rect *painel, int *lista_y, int *h_item, int *aberta) {
-    int esta_aberta = sidebar_aberta ? 1 : 0;
-    if (aberta) *aberta = esta_aberta;
-    if (esta_aberta) {
-        painel->x = 16;
-        painel->y = 18;
-        painel->w = SIDEBAR_ABERTA - 12;
-        painel->h = vh - 36;
-        if (painel->h < 360) painel->h = 360;
-        if (painel->h > vh - 12) painel->h = vh - 12;
-        /* Na referencia, os itens ocupam a regiao central e deixam
-           uma area de respiro acima do primeiro icone. */
-        int passo = painel->h / 12;
-        if (passo < 54) passo = 54;
-        if (passo > 76) passo = 76;
-        if (h_item) *h_item = passo;
-        if (lista_y) *lista_y = painel->y + (painel->h - 6 * passo) / 2 + 18;
-    } else {
-        /* Nas previas, a pilula recolhida tem quase a altura total da
-           janela; nao e uma capsula curta centralizada. Distribuir
-           as seis acoes numa faixa central, deixando respiro nas pontas. */
-        painel->w = SIDEBAR_RECOLHIDA - 26;
-        painel->h = vh - 36;
-        painel->x = 16;
-        painel->y = 18;
-        if (painel->h < 360) painel->h = 360;
-        if (painel->h > vh - 12) painel->h = vh - 12;
-        int passo = painel->h / 11;
-        if (passo < 48) passo = 48;
-        if (passo > 66) passo = 66;
-        if (h_item) *h_item = passo;
-        if (lista_y) *lista_y = painel->y + (painel->h - TOTAL_ACOES_LATERAIS * passo) / 2 + 10;
-    }
+/* Menu unico, compacto e translucido. Mesmo retangulo controla
+   renderizacao, clique e contorno da selecao. */
+static void obter_geometria_sidebar(int vh, SDL_Rect *painel, int *lista_y,
+                                   int *h_item, int *aberta) {
+    if(aberta) *aberta=0;  /* parametro mantido para compatibilidade interna */
+    int h=420;
+    if(h>vh-28) h=vh-28;
+    if(h<180) h=180;
+    painel->x=12;
+    painel->w=62;
+    painel->h=h;
+    painel->y=(vh-h)/2;
+    int passo=(h-42)/TOTAL_ACOES_LATERAIS;
+    if(passo>57) passo=57;
+    if(passo<29) passo=29;
+    if(h_item) *h_item=passo;
+    if(lista_y) *lista_y=painel->y+(h-passo*TOTAL_ACOES_LATERAIS)/2;
 }
-
 
 /* ---------- configuracao (consoles ocultos) ---------- */
 
@@ -455,7 +433,6 @@ int ui_menu_init(void) {
     reconstruir_visiveis(NULL);
     aplicar_selecao();
     foco = FOCO_CARROSSEL;
-    sidebar_aberta = 0;
     item_lateral = LATERAL_CONFIGURACOES;
     return 1;
 }
@@ -575,8 +552,8 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     }
 
     if (tecla == SDLK_TAB) {
-        sidebar_aberta = !sidebar_aberta;
-        foco = FOCO_SIDEBAR;
+        /* TAB passa o foco para a lateral fixa, sem abrir painel. */
+        foco = foco==FOCO_SIDEBAR ? FOCO_CARROSSEL : FOCO_SIDEBAR;
         return MENU_ACAO_NENHUMA;
     }
 
@@ -588,7 +565,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         } else if (tecla == SDLK_RIGHT || tecla == SDLK_ESCAPE) {
             foco = FOCO_CARROSSEL;
         } else if (tecla == SDLK_LEFT) {
-            sidebar_aberta = !sidebar_aberta;
+            foco = FOCO_CARROSSEL;
         } else if (tecla_confirmar(tecla)) {
             switch (item_lateral) {
             case LATERAL_SAIR:
@@ -674,29 +651,18 @@ MenuAcao ui_menu_clique(int mx,int my) {
     }
     SDL_Rect painel_sidebar; int lista_y=0, h_item_sidebar=0, aberta_sidebar=0;
     obter_geometria_sidebar(vh,&painel_sidebar,&lista_y,&h_item_sidebar,&aberta_sidebar);
-    if(mx>=painel_sidebar.x && mx<painel_sidebar.x+painel_sidebar.w && my>=painel_sidebar.y && my<painel_sidebar.y+painel_sidebar.h) {
-        if(aberta_sidebar) {
-            SDL_Rect bt={painel_sidebar.x+16,painel_sidebar.y+14,40,40};
-            if(mx>=bt.x && mx<bt.x+bt.w && my>=bt.y && my<bt.y+bt.h) {
-                sidebar_aberta=0;
-                foco=FOCO_CARROSSEL;
-                return MENU_ACAO_NENHUMA;
-            }
-        }
+    if(mx>=painel_sidebar.x && mx<painel_sidebar.x+painel_sidebar.w &&
+       my>=painel_sidebar.y && my<painel_sidebar.y+painel_sidebar.h) {
         for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
-            int y=lista_y+i*h_item_sidebar;
-            if(i==LATERAL_SAIR && my>=y-10 && my<y) return MENU_ACAO_NENHUMA;
-            if(my>=y && my<y+h_item_sidebar-7) {
+            int cy=lista_y+i*h_item_sidebar+h_item_sidebar/2;
+            int half=h_item_sidebar/2;
+            if(my>=cy-half && my<cy+half) {
                 item_lateral=i;
                 foco=FOCO_SIDEBAR;
-                sidebar_aberta=1;
                 return ui_menu_tecla(SDLK_RETURN,0);
             }
         }
-        if(!aberta_sidebar) {
-            foco=FOCO_SIDEBAR;
-            sidebar_aberta=1;
-        }
+        foco=FOCO_SIDEBAR;
         return MENU_ACAO_NENHUMA;
     }
     SDL_Rect faixa={SIDEBAR_RECOLHIDA,ALTURA_CABECALHO,vw-SIDEBAR_RECOLHIDA,
@@ -881,55 +847,8 @@ static void desenhar_slot(int cx,int y) {
         arredondado(cartucho,5,(SDL_Color){255,255,255,215},1);
     }
 }
-static int controle_conectado=0;
-void ui_menu_controle_conectado(int sim) { controle_conectado=sim; }
-/* Rodape alinhado as previas: tres capsulas discretas no canto inferior
-   direito. A identidade cromatica do preset Colorful e unica (#C84682).
-   Mantem as teclas/acoes ja implementadas, sem prometer favorito inexistente. */
-static void desenhar_atalhos(int vw,int vh) {
-    const Preset preset=preset_ativo();
-    const int claro=preset!=PRESET_DARK;
-    const char *letras_teclado[]={"X","TAB","ESC"};
-    const char *letras_controle[]={"A","START","B"};
-    const char *acoes[]={"Jogar","Menu","Voltar"};
-    const char *const *letras=controle_conectado?letras_controle:letras_teclado;
-    const SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){245,247,255,255};
-    const SDL_Color rosa_rodape={0xC8,0x46,0x82,255};
-    const SDL_Color cor_bolha=preset==PRESET_COLORFUL ? rosa_rodape : tinta;
-    const SDL_Color cor_letra=(preset==PRESET_COLORFUL||claro)
-        ? (SDL_Color){255,255,255,255} : (SDL_Color){20,30,55,255};
-    const SDL_Color fundo=claro?(SDL_Color){242,249,255,208}:(SDL_Color){23,34,74,208};
-    const SDL_Color borda=claro?(SDL_Color){255,255,255,210}:(SDL_Color){202,218,255,110};
-    const int altura=30,espaco=9,margem=16,bolha_h=20;
-    const int y=vh-altura-12;
-
-    int bolha_w[3],cap_w[3],total=0;
-    for(int i=0;i<3;++i) {
-        int tw=ui_texto_largura(letras[i],1);
-        bolha_w[i]=tw+12; if(bolha_w[i]<bolha_h) bolha_w[i]=bolha_h;
-        int lw=ui_texto_largura(acoes[i],1);
-        cap_w[i]=5+bolha_w[i]+7+lw+9;
-        if(cap_w[i]<86) cap_w[i]=86;
-        total+=cap_w[i];
-    }
-    total+=2*espaco;
-    int x=vw-total-margem;
-
-    for(int i=0;i<3;++i) {
-        SDL_Rect capsula={x,y,cap_w[i],altura};
-        arredondado((SDL_Rect){x+1,y+2,cap_w[i],altura},altura/2,
-                    (SDL_Color){18,30,56,claro?28:60},0);
-        desenhar_capsula(capsula,fundo,borda);
-        SDL_Rect bolha={x+5,y+(altura-bolha_h)/2,bolha_w[i],bolha_h};
-        desenhar_capsula(bolha,cor_bolha,cor_bolha);
-        ui_texto_desenhar_centro(letras[i],bolha.x+bolha.w/2,
-                                bolha.y+(bolha.h-ui_texto_altura(1))/2,
-                                1,cor_letra,(SDL_Color){0,0,0,0});
-        ui_texto_desenhar(acoes[i],x+5+bolha_w[i]+7,
-                         y+(altura-ui_texto_altura(1))/2,1,tinta,(SDL_Color){0,0,0,0});
-        x+=cap_w[i]+espaco;
-    }
-}
+/* Mantido por compatibilidade com o frontend; o rodape visual foi removido. */
+void ui_menu_controle_conectado(int sim) { (void)sim; }
 
 /* Papel de parede em modo "cobrir": preenche a janela cortando o excesso, sem deformar. */
 static void desenhar_fundo(int vw, int vh) {
@@ -1142,69 +1061,44 @@ static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
 
 static void desenhar_sidebar(int vh) {
     const Preset preset=preset_ativo();
-    const int claro=preset!=PRESET_DARK;
-    const SDL_Color texto=claro?(SDL_Color){32,45,68,255}:(SDL_Color){245,248,255,255};
-    SDL_Rect painel; int lista_y=0, h_item=0, aberta=0;
+    SDL_Rect painel;
+    int lista_y=0,h_item=0,aberta=0;
     obter_geometria_sidebar(vh,&painel,&lista_y,&h_item,&aberta);
-
-    arredondado((SDL_Rect){painel.x+2,painel.y+4,painel.w,painel.h},aberta?28:painel.w/2,
-                (SDL_Color){10,20,40,26},0);
-    if(aberta) {
-        /* Painel de vidro tingido: Colorful/Light azulado, Dark marinho.
-           Nao trocar wallpaper ao mudar preset de icones. */
-        SDL_Color vidro=preset==PRESET_DARK
-            ? (SDL_Color){22,37,82,190}
-            : preset==PRESET_COLORFUL
-                ? (SDL_Color){175,217,247,178}
-                : (SDL_Color){207,234,250,183};
-        arredondado(painel,28,vidro,0);
-        arredondado(painel,28,claro?(SDL_Color){248,253,255,205}:(SDL_Color){191,207,242,110},1);
-        SDL_Rect botao={painel.x+16,painel.y+14,40,40};
-        arredondado(botao,20,(SDL_Color){255,255,255,20},0);
-        contorno_selecao(botao,19,(SDL_Color){texto.r,texto.g,texto.b,215});
-        /* Chevron geometrico, legivel sem depender do atlas da fonte. */
-        SDL_SetRenderDrawColor(renderer,texto.r,texto.g,texto.b,255);
-        for(int t=0;t<2;++t) {
-            icone_linha(botao.x+13,botao.y+23+t,botao.x+20,botao.y+16+t);
-            icone_linha(botao.x+20,botao.y+16+t,botao.x+27,botao.y+23+t);
-        }
-    } else {
-        desenhar_capsula(painel,
-                         preset==PRESET_DARK ? (SDL_Color){14,26,62,195}
-                         : preset==PRESET_COLORFUL ? (SDL_Color){185,222,249,184}
-                         : (SDL_Color){211,236,252,184},
-                         claro?(SDL_Color){250,252,255,210}:(SDL_Color){191,207,242,105});
-    }
-
+    /* Vidro suave: preserva mais wallpaper do que a lateral anterior. */
+    arredondado((SDL_Rect){painel.x+2,painel.y+3,painel.w,painel.h},
+                painel.w/2,(SDL_Color){12,23,45,22},0);
+    SDL_Color vidro = preset==PRESET_DARK
+        ? (SDL_Color){25,37,73,128}
+        : (SDL_Color){221,238,251,120};
+    SDL_Color borda = preset==PRESET_DARK
+        ? (SDL_Color){218,231,255,100}
+        : (SDL_Color){255,255,255,153};
+    desenhar_capsula(painel,vidro,borda);
     for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
-        int y=lista_y+i*h_item;
-        SDL_Rect item=aberta
-            ? (SDL_Rect){painel.x+11,y,painel.w-22,h_item-7}
-            : (SDL_Rect){painel.x+7,y,painel.w-14,h_item-5};
-        int ativo=item_lateral==i;
-        int em_foco=foco==FOCO_SIDEBAR && ativo;
+        int cy=lista_y+i*h_item+h_item/2;
+        SDL_Rect item={painel.x+8,cy-21,painel.w-16,42};
         SDL_Color cor=icone_cor(i);
         if(i==LATERAL_SAIR)
-            preencher((SDL_Rect){painel.x+18,y-9,painel.w-36,1},
-                     claro?(SDL_Color){35,65,95,85}:(SDL_Color){225,235,255,95});
-        if(ativo) {
-            arredondado(item,aberta?18:17,(SDL_Color){255,255,255,em_foco?34:20},0);
-            contorno_selecao(item,aberta?18:17,(SDL_Color){cor.r,cor.g,cor.b,em_foco?245:215});
+            preencher((SDL_Rect){painel.x+15,cy-h_item/2-4,
+                                  painel.w-30,1},
+                     preset==PRESET_DARK ? (SDL_Color){228,235,255,82}
+                                        : (SDL_Color){43,65,92,76});
+        if(item_lateral==i) {
+            SDL_Color destaque = preset==PRESET_COLORFUL
+                ? (SDL_Color){0xC8,0x46,0x82,240}
+                : (SDL_Color){cor.r,cor.g,cor.b,235};
+            arredondado(item,16,(SDL_Color){255,255,255,18},0);
+            contorno_selecao(item,16,destaque);
         }
+        SDL_Rect icone={painel.x+(painel.w-SIDEBAR_ICON)/2,
+                        cy-SIDEBAR_ICON/2,SIDEBAR_ICON,SIDEBAR_ICON};
         if(icones_laterais[i]) {
-            SDL_Rect caixa=aberta
-                ? (SDL_Rect){item.x+12,item.y+(item.h-28)/2,28,28}
-                : (SDL_Rect){item.x+(item.w-SIDEBAR_ICON)/2,item.y+7,SIDEBAR_ICON,SIDEBAR_ICON};
-            int tw=0,th=0; SDL_QueryTexture(icones_laterais[i],NULL,NULL,&tw,&th);
-            desenhar_encaixado(icones_laterais[i],tw,th,caixa,ativo?255:238);
+            int tw=0,th=0;
+            SDL_QueryTexture(icones_laterais[i],NULL,NULL,&tw,&th);
+            desenhar_encaixado(icones_laterais[i],tw,th,icone,255);
         } else {
-            SDL_Rect caixa=aberta
-                ? (SDL_Rect){item.x+12,item.y+(item.h-28)/2,28,28}
-                : (SDL_Rect){item.x+(item.w-SIDEBAR_ICON)/2,item.y+7,SIDEBAR_ICON,SIDEBAR_ICON};
-            desenhar_icone_fallback(i,caixa,cor);
+            desenhar_icone_fallback(i,icone,cor);
         }
-        if(aberta) ui_texto_desenhar(nomes_laterais[i],item.x+50,
-                      item.y+(item.h-ui_texto_altura(1))/2,1,texto,(SDL_Color){0,0,0,0});
     }
 }
 
@@ -1255,7 +1149,6 @@ void ui_menu_desenhar(void) {
     int titulo_y=area.y+(int)(area.h*0.47f)+cart_box/2+29;
     desenhar_linha_titulo(x_area, largura_area, titulo_y);
     desenhar_slot(x_area+largura_area/2,titulo_y+31);
-    if(vw>530 && vh>440) desenhar_atalhos(vw,vh);
 
     if (aviso[0] && SDL_GetTicks() < aviso_ate) {
         int larg = ui_texto_largura(aviso, 2) + 24;
