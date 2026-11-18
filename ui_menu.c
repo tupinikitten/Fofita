@@ -256,13 +256,10 @@ static SDL_Color icone_cor(int indice) {
     return p==PRESET_LIGHT ? (SDL_Color){248,249,255,255}
                            : (SDL_Color){33,45,66,255};
 }
-/* Respeita os arquivos originais de cada tema. O tema Dark inclui
-   somente alguns PNGs: os demais usam o Light recolorido. */
-/* Pre-filtragem por media de area: um PNG 512x512 nao deve saltar
-   diretamente para 29x29 por uma unica amostragem bilinear. Reduzimos
-   para ate 128px no carregamento, com alfa pre-multiplicado para nao
-   criar halos claros/escuros nas bordas transparentes. O renderer faz
-   apenas a reducao final (~128 -> 29) com filtro linear.
+/* Cada preset usa imagens canonicas com sufixo de tema.
+   Pre-filtragem por media de area para os PNGs 512x512:
+   reduzimos para ate 64px no carregamento, preservando a silhueta e
+   a transparencia antes da reducao final (~64 -> 29) com filtro linear.
    Executado somente ao trocar o preset, nunca a cada frame. */
 static SDL_Texture *icone_textura_suavizada(const char *caminho,
                                           const SDL_Color *tingir) {
@@ -367,6 +364,28 @@ static void carregar_icones_preset(void) {
             fprintf(stderr,"Fofita: icone de estilo ausente: %s\n",caminho);
     }
 }
+/* As setas seguem o mesmo contraste dos icones. Em Colorful,
+   usamos o par claro/escuro conforme o wallpaper; nao existe pasta
+   colorful/arrows e nao recorremos a icones de outro preset. */
+static void carregar_setas_preset(void) {
+    const Preset p=preset_ativo();
+    const char *estilo=p==PRESET_COLORFUL
+        ? (auto_preset==PRESET_LIGHT?"light":"dark")
+        : (p==PRESET_LIGHT?"light":"dark");
+    char caminho[256];
+    snprintf(caminho,sizeof(caminho),"ui/styles/%s/arrows/left_arrow.png",estilo);
+    SDL_Texture *esq=carregar_textura(caminho,NULL,NULL);
+    snprintf(caminho,sizeof(caminho),"ui/styles/%s/arrows/right_arrow.png",estilo);
+    SDL_Texture *dir=carregar_textura(caminho,NULL,NULL);
+    if(esq) {
+        if(seta_esq) SDL_DestroyTexture(seta_esq);
+        seta_esq=esq;
+    }
+    if(dir) {
+        if(seta_dir) SDL_DestroyTexture(seta_dir);
+        seta_dir=dir;
+    }
+}
 /* Cores de texto coerentes com o preset, sem alterar wallpaper. */
 static SDL_Color cor_texto_ui(void) {
     return preset_ativo()!=PRESET_LIGHT ? (SDL_Color){32,45,68,255}
@@ -435,12 +454,10 @@ static void atualizar_wallpaper(const char *caminho,int persistir) {
     if(caminho!=wallpaper_path) snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",caminho);
     avaliar_contraste_wallpaper();
     carregar_icones_preset();
+    carregar_setas_preset();
     if(persistir) salvar_config();
 }
 int ui_menu_init(void) {
-    const UiTema *tema = ui_tema_atual();
-    char caminho[512];
-
     if (!ui_texto_init(renderer)) {
         fprintf(stderr, "Erro: nao foi possivel preparar a fonte do menu.\n");
         return 0;
@@ -449,14 +466,6 @@ int ui_menu_init(void) {
     carregar_config();
     listar_wallpapers();
     atualizar_wallpaper(wallpaper_path,0);
-    (void)tema;
-
-    snprintf(caminho, sizeof(caminho), "%s/arrows/left_arrow.png", tema->pasta_estilo);
-    seta_esq = carregar_textura(caminho, NULL, NULL);
-    snprintf(caminho, sizeof(caminho), "%s/arrows/right_arrow.png", tema->pasta_estilo);
-    seta_dir = carregar_textura(caminho, NULL, NULL);
-
-
 
     size_t quantidade = 0;
     const ConsoleConfig *todos = console_registry_get_all(&quantidade);
@@ -570,6 +579,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 break;
             }
             carregar_icones_preset();
+            carregar_setas_preset();
             salvar_config();
         }
         return MENU_ACAO_NENHUMA;
