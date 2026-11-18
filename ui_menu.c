@@ -272,7 +272,6 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
     /* Area-average 512->64 preserva tracos finos melhor do que 512->128->29. */
     int tw=src->w>64?64:src->w;
     int th=src->h>64?64:src->h;
-    const int trofeu=strstr(caminho,"trophy_icon_")!=NULL;
     if(tw<=0 || th<=0) { SDL_FreeSurface(src); return NULL; }
     SDL_Surface *dst=SDL_CreateRGBSurfaceWithFormat(0,tw,th,32,SDL_PIXELFORMAT_RGBA32);
     if(!dst) { SDL_FreeSurface(src); return NULL; }
@@ -306,15 +305,10 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
                     }
                 }
             }
+            /* Mesmo filtro para todos os icones; nenhum ganha espessura artificial. */
             Uint8 aa=(Uint8)((alpha+count/2)/count);
-            if(trofeu) {
-                /* Descarta particulas muito transparentes e reforca o traco. */
-                if(aa<12) aa=0;
-                else if(aa<245) {
-                    int reforcado=(int)aa*6/5+5;
-                    aa=(Uint8)(reforcado>255?255:reforcado);
-                }
-            }
+            /* Remove apenas ruido abaixo do limiar de visibilidade. */
+            if(aa<=3) aa=0;
             Uint8 rr=0,gg=0,bb=0;
             if(tingir) {
                 rr=tingir->r; gg=tingir->g; bb=tingir->b;
@@ -1104,11 +1098,39 @@ static void desenhar_icone_fallback(int indice,SDL_Rect caixa,SDL_Color cor) {
 
 /* Contorno por linhas e arcos: nao depende da mascara RGBA da textura
    arredondada, que em alguns backends cobria a legenda selecionada. */
-/* O desenhador de cantos usa cobertura subpixel em uma textura RGBA,
-   evitando o serrilhado das linhas/pontos inteiros do SDL_RenderDrawPoint. */
+/* Frame de selecao: linhas e arcos diretamente no renderer.
+   Evita a superficie arredondada (com alfa por pixel), que no backend
+   SDL2-compat/SDL3 pode apresentar interior preenchido indevidamente.
+   Nenhuma operacao deste caminho preenche o retangulo selecionado. */
 static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
     if(r.w<=2 || r.h<=2) return;
-    arredondado(r,raio,cor,2);
+    if(raio>r.w/2) raio=r.w/2;
+    if(raio>r.h/2) raio=r.h/2;
+    if(raio<2) raio=2;
+
+    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
+    /* Traco principal de 1 pixel + um reforco suave somente na borda. */
+    for(int camada=0;camada<2;++camada) {
+        int x=r.x+camada,y=r.y+camada;
+        int w=r.w-camada*2,h=r.h-camada*2;
+        int rad=raio-camada;
+        if(w<=2 || h<=2 || rad<=0) continue;
+        Uint8 a=camada==0?cor.a:(Uint8)(cor.a*0.40f);
+        SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,a);
+        SDL_RenderDrawLine(renderer,x+rad,y,x+w-1-rad,y);
+        SDL_RenderDrawLine(renderer,x+rad,y+h-1,x+w-1-rad,y+h-1);
+        SDL_RenderDrawLine(renderer,x,y+rad,x,y+h-1-rad);
+        SDL_RenderDrawLine(renderer,x+w-1,y+rad,x+w-1,y+h-1-rad);
+        /* Quatro quartos de circulo, calculados somente no contorno. */
+        for(int n=0;n<=rad;++n) {
+            int dx=(int)(sqrtf((float)(rad*rad-n*n))+0.5f);
+            SDL_RenderDrawPoint(renderer,x+rad-dx,y+rad-n);
+            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+rad-n);
+            SDL_RenderDrawPoint(renderer,x+rad-dx,y+h-1-rad+n);
+            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+h-1-rad+n);
+        }
+    }
+    SDL_SetRenderDrawColor(renderer,255,255,255,255);
 }
 
 static void desenhar_sidebar(int vh) {
@@ -1145,8 +1167,7 @@ static void desenhar_sidebar(int vh) {
         /* Compensa levemente as margens transparentes dos PNGs originais:
            trofeu e coracao tem silhouette menor que filtro/configuracoes. */
         int lado=SIDEBAR_ICON;
-        if(i==LATERAL_CONQUISTAS) lado+=3;
-        else if(i==LATERAL_FAVORITOS) lado+=1;
+        if(i==LATERAL_FAVORITOS) lado+=1;
         SDL_Rect icone={painel.x+(painel.w-lado)/2,
                         cy-lado/2,lado,lado};
         if(icones_laterais[i]) {
