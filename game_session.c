@@ -3,6 +3,8 @@
 static GameSessionState estado = GAME_SESSION_MENU;
 static GameSessionError erro = GAME_SESSION_OK;
 static CoreCapabilities recursos;
+/* Somente uma sessao que inicializou o core com sucesso e dona dele. */
+static bool core_ativo = false;
 
 /* Estados e capacidades sao exclusivos da sessao atualmente aberta.
    Nao sao gravados em configuracao, nem atualizados pela interface. */
@@ -32,8 +34,10 @@ bool game_session_start(const char *core_path, const char *game_path) {
         estado=GAME_SESSION_ERROR;
         return false;
     }
+    core_ativo=true;
     if(!load_game(game_path)) {
         close_core();
+        core_ativo=false;
         erro=GAME_SESSION_ERROR_GAME;
         estado=GAME_SESSION_ERROR;
         return false;
@@ -65,7 +69,8 @@ void game_session_run_frame(void) {
 void game_session_stop(void) {
     if(estado==GAME_SESSION_MENU) return;
     estado=GAME_SESSION_STOPPING;
-    close_core();
+    if(core_ativo) close_core();
+    core_ativo=false;
     recursos=(CoreCapabilities){0};
     erro=GAME_SESSION_OK;
     estado=GAME_SESSION_MENU;
