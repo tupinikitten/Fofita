@@ -27,4 +27,7 @@ gcc -std=gnu11 -Wall -Wextra -Werror -o "$test_dir/test_core_content" \
 gcc -std=gnu11 -Wall -Wextra -Werror -o "$test_dir/test_core_paths" \
   core_paths.c tests/test_core_paths.c
 "$test_dir/test_core_paths"
+gcc -std=gnu11 -Wall -Wextra -Werror -o "$test_dir/test_console_registry" \
+  console_registry.c tests/test_console_registry.c
+"$test_dir/test_console_registry"
 echo "Compilacao Windows deve ser validada no Actions."

@@ -56,6 +56,13 @@ jobs:
             core_paths.c tests/test_core_paths.c
           ./b1-paths-test.exe
 
+      - name: Testar registro de GB e GBC (B1.2)
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o b12-registry-test.exe \
+            console_registry.c tests/test_console_registry.c
+          ./b12-registry-test.exe
+
       - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail
