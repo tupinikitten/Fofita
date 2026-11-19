@@ -46,6 +46,16 @@ jobs:
             game_session.c tests/test_game_session.c
           ./b0-session-test.exe
 
+      - name: Testar carregamento e diretorios Libretro (B1)
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o b1-content-test.exe \
+            core_content.c tests/test_core_content.c
+          ./b1-content-test.exe
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o b1-paths-test.exe \
+            core_paths.c tests/test_core_paths.c
+          ./b1-paths-test.exe
+
       - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail

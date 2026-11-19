@@ -1,6 +1,8 @@
 #include "libretro_core.h"
 #include "video_audio.h" // Usamos isto para ligar o áudio e o vídeo
 #include "libretro.h"
+#include "core_content.h"
+#include "core_paths.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
@@ -19,8 +21,12 @@ void (*core_deinit)(void);
 
 HMODULE core_dll = NULL;
 
-/* Os dados da ROM precisam continuar validos enquanto o jogo estiver carregado. */
-static void *rom_data = NULL;
+/* Mantem o buffer da ROM e o caminho validos enquanto o core esta aberto.
+   Cores need_fullpath recebem apenas um caminho, nunca um buffer completo. */
+static CoreContent conteudo;
+static bool precisa_caminho_completo = false;
+static bool core_inicializado = false;
+static void (*api_get_system_info)(struct retro_system_info*) = NULL;
 static int jogo_carregado = 0;
 
 /* Funcoes opcionais: nao tornam invalido um core que nao as exporta.
@@ -63,6 +69,20 @@ extern void retro_input_poll_cb(void);
 extern int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id);
 
 bool retro_environment_cb(unsigned cmd, void *data) {
+    if(cmd == RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) {
+        if(!data) return false;
+        const char *dir=core_paths_system_dir();
+        if(!dir) return false;
+        *(const char**)data=dir;
+        return true;
+    }
+    if(cmd == RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) {
+        if(!data) return false;
+        const char *dir=core_paths_save_dir();
+        if(!dir) return false;
+        *(const char**)data=dir;
+        return true;
+    }
     if (cmd == RETRO_ENVIRONMENT_SET_GEOMETRY) {
         const struct retro_game_geometry *geometria =
             (const struct retro_game_geometry *)data;
@@ -89,6 +109,9 @@ bool init_core(const char* core_path) {
     if(!core_path || !core_path[0]) return false;
     if(core_dll) close_core();
     capacidades = (CoreCapabilities){0};
+    precisa_caminho_completo = false;
+    core_inicializado = false;
+    core_paths_clear();
     core_dll = LoadLibraryA(core_path);
     if (!core_dll) {
         printf("Erro ao carregar a DLL do nucleo.\n");
@@ -106,15 +129,34 @@ bool init_core(const char* core_path) {
     core_unload_game = (void (*)(void))GetProcAddress(core_dll, "retro_unload_game");
     core_run_ptr = (void (*)(void))GetProcAddress(core_dll, "retro_run");
     core_deinit = (void (*)(void))GetProcAddress(core_dll, "retro_deinit");
+    api_get_system_info = (void (*)(struct retro_system_info*))GetProcAddress(
+        core_dll, "retro_get_system_info");
 
     if (!core_set_environment || !core_set_video || !core_set_audio || !core_set_audio_batch ||
         !core_set_input_poll || !core_set_input_state || !core_init || !core_load_game ||
-        !core_run_ptr || !core_deinit) {
+        !core_run_ptr || !core_deinit || !api_get_system_info) {
         printf("Erro: %s nao parece ser um nucleo libretro valido.\n", core_path);
         FreeLibrary(core_dll);
         core_dll = NULL;
         return false;
     }
+
+    /* SDL_GetPrefPath cria uma pasta gravavel por usuario; o core recebe
+       system/ (BIOS) e saves/ independentes do diretorio da instalacao. */
+    char *pref_path=SDL_GetPrefPath("TupiniKitten","Fofita");
+    bool caminhos_prontos=pref_path && core_paths_init(pref_path);
+    SDL_free(pref_path);
+    if(!caminhos_prontos) {
+        fprintf(stderr,"Erro: sem diretorio persistente para BIOS e saves.\n");
+        FreeLibrary(core_dll);
+        core_dll=NULL;
+        return false;
+    }
+
+    /* Consultar metadados antes de retro_init() conforme API Libretro. */
+    struct retro_system_info info={0};
+    api_get_system_info(&info);
+    precisa_caminho_completo=info.need_fullpath;
 
     /* Carregar os simbolos opcionais depois da validacao dos obrigatorios. */
     api_serialize_size = (size_t (*)(void))GetProcAddress(core_dll,"retro_serialize_size");
@@ -133,55 +175,27 @@ bool init_core(const char* core_path) {
     core_set_input_state(retro_input_state_cb);
 
     core_init();
+    core_inicializado = true;
     return true;
 }
 
 bool load_game(const char* game_path) {
-    if(!core_dll || !core_load_game || jogo_carregado || !game_path || !game_path[0])
+    if(!core_dll || !core_inicializado || !core_load_game ||
+       jogo_carregado || !game_path || !game_path[0])
         return false;
-    struct retro_game_info info = {0};
-    info.path = game_path;
 
-    FILE *file = fopen(info.path, "rb");
-    if (!file) {
-        printf("Nao foi possivel encontrar a ROM!\n");
+    if(!core_content_open(&conteudo,game_path,precisa_caminho_completo)) {
+        fprintf(stderr,"Nao foi possivel abrir o arquivo do jogo.\n");
         return false;
     }
 
-    fseek(file, 0, SEEK_END);
-    long tamanho = ftell(file);
-    rewind(file);
-
-    if (tamanho <= 0) {
-        fclose(file);
-        printf("A ROM esta vazia ou ilegivel.\n");
-        return false;
-    }
-
-    rom_data = malloc((size_t)tamanho);
-    if (!rom_data) {
-        fclose(file);
-        printf("Memoria insuficiente para carregar a ROM.\n");
-        return false;
-    }
-
-    size_t lidos = fread(rom_data, 1, (size_t)tamanho, file);
-    fclose(file);
-
-    if (lidos != (size_t)tamanho) {
-        free(rom_data);
-        rom_data = NULL;
-        printf("Falha ao ler a ROM.\n");
-        return false;
-    }
-
-    info.data = rom_data;
-    info.size = (size_t)tamanho;
-
-    if (!core_load_game(&info)) {
-        free(rom_data);
-        rom_data = NULL;
-        printf("O nucleo recusou a ROM.\n");
+    struct retro_game_info info={0};
+    info.path=conteudo.path;
+    info.data=conteudo.data;
+    info.size=conteudo.size;
+    if(!core_load_game(&info)) {
+        core_content_release(&conteudo);
+        fprintf(stderr,"O nucleo recusou a ROM.\n");
         return false;
     }
 
@@ -199,15 +213,18 @@ void unload_game(void) {
     if (jogo_carregado && core_unload_game) core_unload_game();
     jogo_carregado = 0;
     capacidades = (CoreCapabilities){0};
-    free(rom_data);
-    rom_data = NULL;
+    core_content_release(&conteudo);
 }
 
 void close_core(void) {
     unload_game();
-    if (core_deinit && core_dll) core_deinit();
+    if (core_inicializado && core_deinit && core_dll) core_deinit();
     if (core_dll) FreeLibrary(core_dll);
     core_dll = NULL;
+    core_inicializado = false;
+    precisa_caminho_completo = false;
+    api_get_system_info = NULL;
+    core_paths_clear();
     core_run_ptr = NULL;
     core_deinit = NULL;
     core_init = NULL;
