@@ -26,6 +26,7 @@ typedef struct {
     /* Campos finais: ficam NULL (zero) quando um console ainda nao os define. */
     const char *caminho_core;   /* DLL do nucleo libretro; NULL = console ainda nao ativo */
     const char *caminho_icone;  /* icone do console no menu; NULL = mostra so o nome */
+    const char *familia;        /* grupo de navegacao (ex.: "Sega"); NULL = sistema individual */
 } ConsoleConfig;
 
 const ConsoleConfig *console_registry_get_all(size_t *quantidade);
