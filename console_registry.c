@@ -19,7 +19,6 @@ EXT_LIST(ext_ps1, ".cue", ".chd", ".pbp", ".iso");
 EXT_LIST(ext_psp, ".iso", ".cso", ".pbp");
 EXT_LIST(ext_dreamcast, ".cdi", ".gdi", ".chd");
 EXT_LIST(ext_neogeo, ".zip", ".7z");
-EXT_LIST(ext_arcade, ".zip", ".7z");
 
 /*
  * Os sistemas sem molde ainda ficam cadastrados, mas não aparecem com um
@@ -48,7 +47,6 @@ static const ConsoleConfig consoles[] = {
     {"psp", "PlayStation Portable", ext_psp, sizeof(ext_psp)/sizeof(ext_psp[0]), "roms/psp", "assets/psp", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/psp_icon.png"},
     {"dreamcast", "Dreamcast", ext_dreamcast, sizeof(ext_dreamcast)/sizeof(ext_dreamcast[0]), "roms/dreamcast", "assets/dreamcast", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
     {"neogeo", "Neo Geo", ext_neogeo, sizeof(ext_neogeo)/sizeof(ext_neogeo[0]), "roms/neogeo", "assets/neogeo", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
-    {"arcade", "Arcade", ext_arcade, sizeof(ext_arcade)/sizeof(ext_arcade[0]), "roms/arcade", "assets/arcade", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL}
 };
 
 static int equals_ignore_case(const char *a, const char *b) {
