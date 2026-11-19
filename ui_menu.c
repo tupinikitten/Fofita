@@ -1116,7 +1116,7 @@ static float distancia_retangulo_arredondado(float px,float py,float w,float h,
    cobertura do anel (borda externa menos borda interna), entao nao ha
    falhas nos cantos nem trechos "tracejados". Desenha somente pontos da
    propria borda; o miolo nunca e tocado. Espessura em pixels logicos. */
-#define ESPESSURA_SIDEBAR 3.0f
+#define ESPESSURA_SIDEBAR 1.8f  /* ~traco dos icones: ~30px/512 * 29px */
 static void contorno_selecao_esp(SDL_Rect r,int raio,SDL_Color cor,float esp) {
     if(r.w<=2 || r.h<=2) return;
     if(raio>r.w/2) raio=r.w/2;
