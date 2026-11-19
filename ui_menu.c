@@ -1101,35 +1101,58 @@ static void desenhar_icone_fallback(int indice,SDL_Rect caixa,SDL_Color cor) {
 /* Contorno anti-aliased de dois pixels logicos, sem preenchimento.
    Usa cobertura subpixel da textura ja existente (apenas a borda).
    Os preenchimentos escuros antigos foram removidos dos itens e modais. */
-static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
+/* Distancia com sinal ate a borda de um retangulo arredondado (negativa
+   dentro). Mesmo calculo de cobertura_arredondada, mas em float. */
+static float distancia_retangulo_arredondado(float px,float py,float w,float h,
+                                             float raio) {
+    float mx=w*0.5f,my=h*0.5f;
+    float dx=fabsf(px-mx)-(mx-raio);
+    float dy=fabsf(py-my)-(my-raio);
+    float fx=dx>0.0f?dx:0.0f,fy=dy>0.0f?dy:0.0f;
+    return sqrtf(fx*fx+fy*fy)+fminf(fmaxf(dx,dy),0.0f)-raio;
+}
+
+/* Contorno anti-aliased, SEM preenchimento: cada pixel recebe alfa pela
+   cobertura do anel (borda externa menos borda interna), entao nao ha
+   falhas nos cantos nem trechos "tracejados". Desenha somente pontos da
+   propria borda; o miolo nunca e tocado. Espessura em pixels logicos. */
+#define ESPESSURA_SIDEBAR 3.0f
+static void contorno_selecao_esp(SDL_Rect r,int raio,SDL_Color cor,float esp) {
     if(r.w<=2 || r.h<=2) return;
     if(raio>r.w/2) raio=r.w/2;
     if(raio>r.h/2) raio=r.h/2;
     if(raio<2) raio=2;
 
+    if(esp<1.0f) esp=1.0f;
+    float raio_f=(float)raio;
+    float raio_in=raio_f-esp;
+    if(raio_in<0.0f) raio_in=0.0f;
+    float w_in=(float)r.w-2.0f*esp,h_in=(float)r.h-2.0f*esp;
+
     SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
-    /* Traco principal de 1 pixel + um reforco suave somente na borda. */
-    for(int camada=0;camada<2;++camada) {
-        int x=r.x+camada,y=r.y+camada;
-        int w=r.w-camada*2,h=r.h-camada*2;
-        int rad=raio-camada;
-        if(w<=2 || h<=2 || rad<=0) continue;
-        Uint8 a=camada==0?cor.a:(Uint8)(cor.a*0.40f);
-        SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,a);
-        SDL_RenderDrawLine(renderer,x+rad,y,x+w-1-rad,y);
-        SDL_RenderDrawLine(renderer,x+rad,y+h-1,x+w-1-rad,y+h-1);
-        SDL_RenderDrawLine(renderer,x,y+rad,x,y+h-1-rad);
-        SDL_RenderDrawLine(renderer,x+w-1,y+rad,x+w-1,y+h-1-rad);
-        /* Quatro quartos de circulo, calculados somente no contorno. */
-        for(int n=0;n<=rad;++n) {
-            int dx=(int)(sqrtf((float)(rad*rad-n*n))+0.5f);
-            SDL_RenderDrawPoint(renderer,x+rad-dx,y+rad-n);
-            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+rad-n);
-            SDL_RenderDrawPoint(renderer,x+rad-dx,y+h-1-rad+n);
-            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+h-1-rad+n);
+    for(int y=0;y<r.h;++y) {
+        for(int x=0;x<r.w;++x) {
+            float px=x+0.5f,py=y+0.5f;
+            float ext=limite01(0.5f-distancia_retangulo_arredondado(
+                                         px,py,(float)r.w,(float)r.h,raio_f));
+            if(ext<=0.0f) continue;
+            float inte=0.0f;
+            if(w_in>0.0f && h_in>0.0f)
+                inte=limite01(0.5f-distancia_retangulo_arredondado(
+                                       px-esp,py-esp,w_in,h_in,raio_in));
+            float cobertura=limite01(ext-inte);
+            Uint8 a=(Uint8)(cor.a*cobertura+0.5f);
+            if(a==0) continue;
+            SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,a);
+            SDL_RenderDrawPoint(renderer,r.x+x,r.y+y);
         }
     }
     SDL_SetRenderDrawColor(renderer,255,255,255,255);
+}
+
+/* Demais usos (modais/listas) mantem o traco fino de antes. */
+static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
+    contorno_selecao_esp(r,raio,cor,1.5f);
 }
 
 static void desenhar_sidebar(int vh) {
@@ -1161,7 +1184,7 @@ static void desenhar_sidebar(int vh) {
                 ? (SDL_Color){0xC8,0x46,0x82,240}
                 : (SDL_Color){cor.r,cor.g,cor.b,235};
             /* Moldura sem preenchimento para nao escurecer os icones. */
-            contorno_selecao(item,16,destaque);
+            contorno_selecao_esp(item,16,destaque,ESPESSURA_SIDEBAR);
         }
         /* Compensa levemente as margens transparentes dos PNGs originais:
            trofeu e coracao tem silhouette menor que filtro/configuracoes. */
