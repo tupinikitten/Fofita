@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <SDL2/SDL.h>
 #include "video_audio.h"
-#include "libretro_core.h"
+#include "game_session.h"
 #include "input.h"
 #include "console_registry.h"
 #include "ui_carousel.h"
@@ -59,15 +59,11 @@ static bool iniciar_jogo_atual(void) {
     }
 
     proporcao_video = 0.0f;
-    if (!init_core(console->caminho_core)) {
-        ui_menu_aviso("Falha ao carregar o nucleo do console");
-        return false;
-    }
-
-    if (!load_game(rom)) {
-        printf("Erro: a ROM %s falhou ao abrir.\n", rom);
-        close_core();
-        ui_menu_aviso("Falha ao abrir a ROM");
+    if (!game_session_start(console->caminho_core,rom)) {
+        if(game_session_last_error()==GAME_SESSION_ERROR_CORE)
+            ui_menu_aviso("Falha ao carregar o nucleo do console");
+        else
+            ui_menu_aviso("Falha ao abrir a ROM");
         return false;
     }
 
@@ -80,7 +76,7 @@ static bool iniciar_jogo_atual(void) {
 
 /* Encerra o jogo atual e volta ao menu, sem fechar o aplicativo. */
 static void voltar_ao_menu(void) {
-    close_core();               /* descarrega o jogo, libera a ROM e o nucleo */
+    game_session_stop();       /* descarrega o jogo e libera o nucleo */
     proporcao_video = 0.0f;
     descartar_textura_jogo();
     limpar_audio();
@@ -218,7 +214,7 @@ int main(int argc, char *argv[]) {
         if (em_menu) {
             ui_menu_desenhar();
         } else {
-            run_core();
+            game_session_run_frame();
             desenhar_jogo_com_proporcao();
         }
 
@@ -227,7 +223,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (controle) SDL_GameControllerClose(controle);
-    if (!em_menu) close_core();
+    game_session_stop();
     ui_menu_fechar();
     fechar_carousel();
     fechar_video_audio();

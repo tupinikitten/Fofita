@@ -23,6 +23,42 @@ HMODULE core_dll = NULL;
 static void *rom_data = NULL;
 static int jogo_carregado = 0;
 
+/* Funcoes opcionais: nao tornam invalido um core que nao as exporta.
+   Os recursos reais sao consultados somente depois de carregar o jogo. */
+static size_t (*api_serialize_size)(void) = NULL;
+static bool (*api_serialize)(void*,size_t) = NULL;
+static bool (*api_unserialize)(const void*,size_t) = NULL;
+static void *(*api_get_memory_data)(unsigned) = NULL;
+static size_t (*api_get_memory_size)(unsigned) = NULL;
+static void (*api_cheat_reset)(void) = NULL;
+static void (*api_cheat_set)(unsigned,bool,const char*) = NULL;
+static CoreCapabilities capacidades;
+
+const CoreCapabilities *core_get_capabilities(void) {
+    return &capacidades;
+}
+
+static void atualizar_capacidades(void) {
+    capacidades = (CoreCapabilities){0};
+    if(!jogo_carregado) return;
+    if(api_serialize_size && api_serialize && api_unserialize) {
+        size_t size = api_serialize_size();
+        if(size > 0) {
+            capacidades.save_states_available = true;
+            capacidades.save_state_bytes = size;
+        }
+    }
+    if(api_get_memory_data && api_get_memory_size) {
+        size_t size = api_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        if(size > 0 && api_get_memory_data(RETRO_MEMORY_SAVE_RAM)) {
+            capacidades.save_ram_available = true;
+            capacidades.save_ram_bytes = size;
+        }
+    }
+    /* Apenas indica a presenca dos callbacks, nao suporte a cada codigo. */
+    capacidades.cheat_api_present = api_cheat_reset && api_cheat_set;
+}
+
 extern void retro_input_poll_cb(void);
 extern int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id);
 
@@ -50,6 +86,9 @@ bool retro_environment_cb(unsigned cmd, void *data) {
 }
 
 bool init_core(const char* core_path) {
+    if(!core_path || !core_path[0]) return false;
+    if(core_dll) close_core();
+    capacidades = (CoreCapabilities){0};
     core_dll = LoadLibraryA(core_path);
     if (!core_dll) {
         printf("Erro ao carregar a DLL do nucleo.\n");
@@ -77,6 +116,15 @@ bool init_core(const char* core_path) {
         return false;
     }
 
+    /* Carregar os simbolos opcionais depois da validacao dos obrigatorios. */
+    api_serialize_size = (size_t (*)(void))GetProcAddress(core_dll,"retro_serialize_size");
+    api_serialize = (bool (*)(void*,size_t))GetProcAddress(core_dll,"retro_serialize");
+    api_unserialize = (bool (*)(const void*,size_t))GetProcAddress(core_dll,"retro_unserialize");
+    api_get_memory_data = (void *(*)(unsigned))GetProcAddress(core_dll,"retro_get_memory_data");
+    api_get_memory_size = (size_t (*)(unsigned))GetProcAddress(core_dll,"retro_get_memory_size");
+    api_cheat_reset = (void (*)(void))GetProcAddress(core_dll,"retro_cheat_reset");
+    api_cheat_set = (void (*)(unsigned,bool,const char*))GetProcAddress(core_dll,"retro_cheat_set");
+
     core_set_environment(retro_environment_cb);
     core_set_video(retro_video_refresh_cb);
     core_set_audio(retro_audio_sample_cb);
@@ -89,6 +137,8 @@ bool init_core(const char* core_path) {
 }
 
 bool load_game(const char* game_path) {
+    if(!core_dll || !core_load_game || jogo_carregado || !game_path || !game_path[0])
+        return false;
     struct retro_game_info info = {0};
     info.path = game_path;
 
@@ -136,6 +186,7 @@ bool load_game(const char* game_path) {
     }
 
     jogo_carregado = 1;
+    atualizar_capacidades();
     return true;
 }
 
@@ -147,6 +198,7 @@ void run_core(void) {
 void unload_game(void) {
     if (jogo_carregado && core_unload_game) core_unload_game();
     jogo_carregado = 0;
+    capacidades = (CoreCapabilities){0};
     free(rom_data);
     rom_data = NULL;
 }
@@ -158,4 +210,21 @@ void close_core(void) {
     core_dll = NULL;
     core_run_ptr = NULL;
     core_deinit = NULL;
+    core_init = NULL;
+    core_load_game = NULL;
+    core_unload_game = NULL;
+    core_set_environment = NULL;
+    core_set_video = NULL;
+    core_set_audio = NULL;
+    core_set_audio_batch = NULL;
+    core_set_input_poll = NULL;
+    core_set_input_state = NULL;
+    api_serialize_size = NULL;
+    api_serialize = NULL;
+    api_unserialize = NULL;
+    api_get_memory_data = NULL;
+    api_get_memory_size = NULL;
+    api_cheat_reset = NULL;
+    api_cheat_set = NULL;
+    capacidades = (CoreCapabilities){0};
 }
