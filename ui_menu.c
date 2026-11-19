@@ -1102,8 +1102,34 @@ static void desenhar_icone_fallback(int indice,SDL_Rect caixa,SDL_Color cor) {
    Usa cobertura subpixel da textura ja existente (apenas a borda).
    Os preenchimentos escuros antigos foram removidos dos itens e modais. */
 static void contorno_selecao(SDL_Rect r,int raio,SDL_Color cor) {
-    if(r.w<=4 || r.h<=4) return;
-    arredondado(r,raio,cor,2);
+    if(r.w<=2 || r.h<=2) return;
+    if(raio>r.w/2) raio=r.w/2;
+    if(raio>r.h/2) raio=r.h/2;
+    if(raio<2) raio=2;
+
+    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
+    /* Traco principal de 1 pixel + um reforco suave somente na borda. */
+    for(int camada=0;camada<2;++camada) {
+        int x=r.x+camada,y=r.y+camada;
+        int w=r.w-camada*2,h=r.h-camada*2;
+        int rad=raio-camada;
+        if(w<=2 || h<=2 || rad<=0) continue;
+        Uint8 a=camada==0?cor.a:(Uint8)(cor.a*0.40f);
+        SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,a);
+        SDL_RenderDrawLine(renderer,x+rad,y,x+w-1-rad,y);
+        SDL_RenderDrawLine(renderer,x+rad,y+h-1,x+w-1-rad,y+h-1);
+        SDL_RenderDrawLine(renderer,x,y+rad,x,y+h-1-rad);
+        SDL_RenderDrawLine(renderer,x+w-1,y+rad,x+w-1,y+h-1-rad);
+        /* Quatro quartos de circulo, calculados somente no contorno. */
+        for(int n=0;n<=rad;++n) {
+            int dx=(int)(sqrtf((float)(rad*rad-n*n))+0.5f);
+            SDL_RenderDrawPoint(renderer,x+rad-dx,y+rad-n);
+            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+rad-n);
+            SDL_RenderDrawPoint(renderer,x+rad-dx,y+h-1-rad+n);
+            SDL_RenderDrawPoint(renderer,x+w-1-rad+dx,y+h-1-rad+n);
+        }
+    }
+    SDL_SetRenderDrawColor(renderer,255,255,255,255);
 }
 
 static void desenhar_sidebar(int vh) {
