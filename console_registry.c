@@ -18,7 +18,6 @@ EXT_LIST(ext_genesis, ".md", ".gen", ".bin");
 EXT_LIST(ext_ps1, ".cue", ".chd", ".pbp", ".iso");
 EXT_LIST(ext_psp, ".iso", ".cso", ".pbp");
 EXT_LIST(ext_dreamcast, ".cdi", ".gdi", ".chd");
-EXT_LIST(ext_neogeo, ".zip", ".7z");
 
 /*
  * Os sistemas sem molde ainda ficam cadastrados, mas não aparecem com um
@@ -26,6 +25,10 @@ EXT_LIST(ext_neogeo, ".zip", ".7z");
  * respectivos assets forem preparados.
  * pasta_roms usa subpastas por sistema; a leitura também aceita ROMs antigas
  * diretamente em roms/.
+ *
+ * "Sega" agrupa Master System, Game Gear, Mega Drive/Genesis e Dreamcast
+ * para a futura navegacao. Cada sistema preserva ROMs e core proprios:
+ * a familia NAO e um unico emulador. A UI ainda navega sistemas individuais.
  */
 static const ConsoleConfig consoles[] = {
     {"atari2600", "Atari 2600", ext_atari2600, sizeof(ext_atari2600)/sizeof(ext_atari2600[0]), "roms/atari2600", "assets/atari2600", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/atari_icon.png"},
@@ -40,13 +43,12 @@ static const ConsoleConfig consoles[] = {
     {"gba", "Game Boy Advance", ext_gba, sizeof(ext_gba)/sizeof(ext_gba[0]), "roms/gba", "assets/gba", "templates/gba_template.png", 400,400, 60,120,280,150, CAPA_CONTAIN, 0, NULL, "ui/consoles/gba_icon.png"},
     {"n64", "Nintendo 64", ext_n64, sizeof(ext_n64)/sizeof(ext_n64[0]), "roms/n64", "assets/n64", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
     {"nds", "Nintendo DS", ext_ds, sizeof(ext_ds)/sizeof(ext_ds[0]), "roms/nds", "assets/nds", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/ds_icon.png"},
-    {"sms", "Master System", ext_sms, sizeof(ext_sms)/sizeof(ext_sms[0]), "roms/sms", "assets/sms", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
-    {"gamegear", "Game Gear", ext_gamegear, sizeof(ext_gamegear)/sizeof(ext_gamegear[0]), "roms/gamegear", "assets/gamegear", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
-    {"genesis", "Mega Drive / Genesis", ext_genesis, sizeof(ext_genesis)/sizeof(ext_genesis[0]), "roms/genesis", "assets/genesis", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
+    {"sms", "Master System", ext_sms, sizeof(ext_sms)/sizeof(ext_sms[0]), "roms/sms", "assets/sms", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL, "Sega"},
+    {"gamegear", "Game Gear", ext_gamegear, sizeof(ext_gamegear)/sizeof(ext_gamegear[0]), "roms/gamegear", "assets/gamegear", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL, "Sega"},
+    {"genesis", "Mega Drive / Genesis", ext_genesis, sizeof(ext_genesis)/sizeof(ext_genesis[0]), "roms/genesis", "assets/genesis", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL, "Sega"},
     {"ps1", "PlayStation", ext_ps1, sizeof(ext_ps1)/sizeof(ext_ps1[0]), "roms/ps1", "assets/ps1", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/ps1_icon.png"},
     {"psp", "PlayStation Portable", ext_psp, sizeof(ext_psp)/sizeof(ext_psp[0]), "roms/psp", "assets/psp", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/psp_icon.png"},
-    {"dreamcast", "Dreamcast", ext_dreamcast, sizeof(ext_dreamcast)/sizeof(ext_dreamcast[0]), "roms/dreamcast", "assets/dreamcast", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
-    {"neogeo", "Neo Geo", ext_neogeo, sizeof(ext_neogeo)/sizeof(ext_neogeo[0]), "roms/neogeo", "assets/neogeo", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
+    {"dreamcast", "Dreamcast", ext_dreamcast, sizeof(ext_dreamcast)/sizeof(ext_dreamcast[0]), "roms/dreamcast", "assets/dreamcast", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL, "Sega"},
 };
 
 static int equals_ignore_case(const char *a, const char *b) {
