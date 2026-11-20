@@ -64,7 +64,7 @@ Jogo em execução
         ├── Salvar estado / Carregar estado
         ├── Reiniciar
         ├── Cheats
-        ├── Vídeo: frames, overlays, filtros e shaders
+        ├── Acesso às Configurações > Vídeo do jogo (atalho futuro, opcional)
         ├── Controles e opções do core
         └── Voltar ao dashboard
 ```
@@ -77,15 +77,46 @@ Jogo em execução
 
 **Aceite:** menu pode ser testado com backend simulado; não é necessário ter todos os emuladores implementados para validar layout.
 
-### F4 — Personalização do vídeo do jogo
+### F4 — Personalização do vídeo do jogo (etapa futura, sem implementação agora)
+
+**Decisão de navegação:** escala, filtros, shaders e refinamentos da imagem ficam dentro de **Configurações > Vídeo do jogo**, como **subseção do menu de Configurações** já planejado. Não criar nova ação na sidebar, nem misturar essas opções com **Aparência** (que cuida do dashboard, wallpapers, ícones e estilo cartucho/card). O menu rápido poderá ter apenas um atalho para essa subseção no futuro, sem duplicar as configurações.
+
+Estrutura sugerida (sujeita a testes de usabilidade):
+
+```text
+Configurações
+    └── Vídeo do jogo
+        ├── Escala e proporção
+        │   ├── Escala inteira (integer scaling) / Ajustar à tela
+        │   └── Manter proporção original
+        ├── Nitidez e filtros
+        │   ├── Nítido (nearest-neighbor / pixel perfect)
+        │   └── Suave (linear / bilinear)
+        ├── Shaders (futuro)
+        │   ├── Desligado (sempre disponível)
+        │   ├── LCD clean / LCD authentic / grade LCD
+        │   └── CRT e outros presets compatíveis
+        ├── Cor e efeitos portáteis
+        │   ├── Paletas do Game Boy (DMG, preto e branco etc.)
+        │   ├── Correção de cor no Game Boy Color
+        │   └── Ghosting / mistura de quadros (ativação opcional)
+        └── Frames e overlays
+            ├── Sem frame
+            └── Catálogo de frames PNG com prévia
+```
+
+**Prioridade quando a fase começar:** 1) investigar a origem do borrado em GB/GBC; 2) oferecer filtro nearest-neighbor e opção de escala inteira, com preservação de aspecto; 3) somente depois desenvolver presets, shaders/grade LCD e configurações de cor.
 
 - [ ] Distinguir **wallpaper do dashboard** de **frame/overlay do jogo** — configurações diferentes.
-- [ ] Catálogo de frames PNG, com prévia e opção Sem frame.
-- [ ] Overlay acima ou ao lado da imagem sem esconder textos de erro, indicadores ou foco do menu.
-- [ ] Menu de filtros e shaders deve mostrar somente opções suportadas pelo backend gráfico; sempre disponibilizar opção Sem filtro.
-- [ ] Persistir escolhas por sistema, por jogo ou globais conforme decisão explícita no futuro; não presumir herança que surpreenda a usuária.
+- [ ] Implementar escalonamento sem distorção e escolher **nearest / linear**, sem alterar o visual atual do NES por padrão.
+- [ ] Planejar fallback quando escala inteira não preencher a janela: centralizar imagem e manter barras laterais/superiores adequadas.
+- [ ] Criar opções de cor por sistema quando o respectivo core/renderer oferecer suporte (GB/GBC primeiro).
+- [ ] Catálogo de frames PNG, com prévia e opção Sem frame; overlays nunca escondem erros, indicadores ou foco.
+- [ ] Mostrar somente filtros/shaders realmente suportados pelo backend gráfico e manter opção **Desligado / Sem efeito**.
+- [ ] Definir futuramente se a persistência será global, por console ou por jogo; evitar mudanças silenciosas e permitir restaurar padrões.
+- [ ] Validar desempenho de vídeo, áudio e fluidez no Windows e, depois, no Switch real antes de habilitar efeitos exigentes.
 
-**Aceite:** presets visuais e opções avançadas não se confundem e efeitos gráficos podem ser desativados com um único comando.
+**Aceite:** GB/GBC podem usar pixels nítidos e escala consistente sem interferir no NES, os efeitos opcionais podem ser desligados com facilidade e nenhuma mudança visual é aplicada antes da etapa F4.
 
 ### F5 — RetroAchievements: conta, conquistas e privacidade
 
@@ -201,7 +232,7 @@ git push origin feature/ui-next
 | M0 | Screenshots de referência e contratos | `game_session` e capacidades | O jogo NES segue funcionando |
 | M1 | Estilo flat/silhueta | Novos cores e diretórios | Carrossel exibe só sistemas jogáveis |
 | M2 | Menu rápido com mocks | SRAM e savestates | UI chama ações reais e trata falhas |
-| M3 | Frames e overlays configuráveis | Compositor de vídeo | Sem perda de FPS ou áudio |
+| M3 | Configurações > Vídeo do jogo: escala, filtros, frames, overlays e shaders opcionais (F4) | Compositor de vídeo (B4) | Pixels nítidos quando selecionado, efeitos desligáveis e sem perda de FPS ou áudio |
 | M4 | Configuração de cheats e Hardcore | Cheats + restrições | Bloqueios coerentes e avisos |
 | M5 | Login e lista de conquistas | rcheevos + HTTPS + segredo seguro | Testes de segurança, offline e conta |
 | M6 | Revisão visual para portátil/dock | Portabilidade e desempenho | Candidato a release |

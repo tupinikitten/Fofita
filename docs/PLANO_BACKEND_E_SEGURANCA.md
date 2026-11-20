@@ -81,15 +81,21 @@ Separação obrigatória: o frontend **solicita ações** e exibe estados; o bac
 
 **Aceite:** atalhos confiáveis e nenhuma alteração de memória/estado sem ação explícita da pessoa usuária.
 
-### B4 — Vídeo, frames, overlays e shaders
+### B4 — Vídeo, escala, filtros, frames, overlays e shaders (futuro)
 
-- [ ] Separar `game_video.h/.c` para apresentação do frame, aspect ratio, integer scaling, letterbox e composição.
-- [ ] Implementar primeiro **frames PNG** e overlays simples (camadas decorativas sem alterar memória/execução do jogo).
-- [ ] Só depois estudar filtros e shaders: distinguir filtro SDL2 de verdadeiro pipeline de GPU; selecionar API compatível com Windows e, futuramente, Switch.
-- [ ] Manter opção **Sem efeito** e fallback caso o shader não seja suportado.
-- [ ] Medir tempo de frame, RAM e consumo em portátil/dock; evitar prometer desempenho sem teste em hardware.
+**Integração planejada:** o frontend expõe essas preferências em **Configurações > Vídeo do jogo** (subseção do menu Configurações), conforme F4 do [Plano do Frontend](PLANO_FRONTEND_E_INTEGRACAO_GIT.md). **Não desenvolver agora** nem modificar o dashboard aprovado durante B1/B2. Esta etapa deve começar quando a emulação e os salvamentos estiverem estáveis.
 
-**Aceite:** frame/overlay pode ser ativado/desativado sem interferir no áudio e na taxa de quadros do jogo de referência.
+- [ ] Separar `game_video.h/.c` para apresentação do frame, aspect ratio, **integer scaling**, letterbox e composição.
+- [ ] Corrigir a causa de borrado do vídeo nos portáteis GB/GBC: oferecer amostragem **nearest-neighbor (pixels nítidos)** ou **linear/bilinear (suave)**; não confundir interpolação do renderer com processamento interno do core.
+- [ ] Oferecer escala inteira quando couber e ajuste livre com preservação da proporção; centralizar e preencher sobras com barras quando necessário.
+- [ ] Manter a configuração inicial do NES e demais sistemas inalterada até validação explícita; filtros e perfis não devem ser aplicados silenciosamente.
+- [ ] Implementar frames PNG e overlays simples (camadas decorativas sem alterar memória/execução do jogo) em subetapa posterior.
+- [ ] Só depois estudar shaders/presets LCD clean, LCD authentic, grade LCD, CRT e correção de cores; distinguir filtro SDL2 de verdadeiro pipeline GPU e avaliar API compatível com Windows e futuramente Switch.
+- [ ] Separar correção de cor/paletas (GB/GBC) e ghosting/mistura de quadros, sempre opcionais e conforme suporte do core.
+- [ ] Expor capacidades e fallback seguros, sempre com opção **Sem filtro / Shader desligado**, e permitir restaurar padrões.
+- [ ] Definir persistência global, por sistema ou por jogo com o frontend antes de implementar; medir tempo de frame, RAM e desempenho portátil/dock em hardware real.
+
+**Aceite:** melhoria de nitidez é verificável em GB/GBC, preferências podem ser revertidas e efeitos não interferem no áudio, na taxa de quadros nem no visual já aprovado do NES.
 
 ## 4. RetroAchievements e segurança desde o desenho da arquitetura
 
