@@ -1,5 +1,16 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+/* O runner Windows pode exibir uma caixa de dialogo quando assert falha.
+   Encerrar diretamente para deixar o erro visivel no log do Actions. */
+#undef assert
+#define assert(cond) do { \
+    if(!(cond)) { \
+        fprintf(stderr,"Input latch FAIL %s:%d: %s\\n",__FILE__,__LINE__,#cond); \
+        exit(1); \
+    } \
+} while(0)
 #include <string.h>
 #include "../input_latch.h"
 
