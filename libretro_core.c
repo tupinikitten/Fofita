@@ -69,6 +69,14 @@ extern void retro_input_poll_cb(void);
 extern int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id);
 
 bool retro_environment_cb(unsigned cmd, void *data) {
+    /* Gambatte exige confirmar que o frontend aceita reutilizar o quadro
+       anterior. video_audio.c ja preserva a textura quando data == NULL.
+       Sem esta resposta o Gambatte rejeita TODAS as ROMs na inicializacao. */
+    if(cmd == RETRO_ENVIRONMENT_GET_CAN_DUPE) {
+        if(!data) return false;
+        *(bool*)data = true;
+        return true;
+    }
     if(cmd == RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) {
         if(!data) return false;
         const char *dir=core_paths_system_dir();
