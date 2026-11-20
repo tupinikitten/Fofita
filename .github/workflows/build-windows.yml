@@ -92,6 +92,14 @@ jobs:
             input_rules.c tests/test_input_rules.c $(pkg-config --cflags --libs sdl2)
           ./input-rules-test.exe
 
+      - name: Testar remapeamento e persistencia dos controles
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o input-bindings-test.exe \
+            input_bindings.c tests/test_input_bindings.c \
+            $(pkg-config --cflags --libs sdl2)
+          ./input-bindings-test.exe
+
       - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail

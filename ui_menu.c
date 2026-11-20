@@ -3,6 +3,7 @@
 #include "ui_theme.h"
 #include "ui_carousel.h"
 #include "ui_game_view.h"
+#include "input_bindings.h"
 #include "video_audio.h"
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
@@ -88,7 +89,13 @@ static Uint32 animacao_slot_inicio = 0;
 static int item_lateral = LATERAL_CONFIGURACOES;
 static int tela_configuracoes = 0;
 static int opcao_configuracoes = 0;
-static int total_opcoes_config = 2;
+static int total_opcoes_config = 3;
+/* Submenu de remapeamento, sem modificar sidebar ou Aparencia. */
+static int tela_controles=0;
+static int opcao_controles=0;
+static int dispositivo_controles=0; /* 0: teclado; 1: controle SDL2 */
+static int capturando_controle=0;
+#define TOTAL_OPCOES_CONTROLES (INPUT_BIND_COUNT+3)
 
 static Foco foco = FOCO_CARROSSEL;
 static char aviso[128] = "";
@@ -519,7 +526,69 @@ static int tecla_confirmar(SDL_Keycode t) {
     return t == SDLK_RETURN || t == SDLK_KP_ENTER || t == SDLK_x;
 }
 
+/* Captura o evento SDL original ANTES da traducao de gamepad em Enter/Esc.
+   Nao aceita Esc/Espaco como teclas de jogo: atalhos de retorno garantidos. */
+int ui_menu_capturar_remapeamento(const SDL_Event *event) {
+    if(!tela_controles || !capturando_controle || !event) return 0;
+    if(event->type==SDL_KEYDOWN) {
+        if(event->key.repeat) return 1;
+        if(event->key.keysym.sym==SDLK_ESCAPE) {
+            capturando_controle=0; /* cancelar */
+            return 1;
+        }
+        if(dispositivo_controles==0) {
+            if(input_bindings_set_keyboard((InputBindAction)opcao_controles,
+                                           event->key.keysym.scancode)) {
+                capturando_controle=0;
+                if(!input_bindings_save())
+                    ui_menu_aviso("Alterado, mas nao foi possivel salvar a configuracao");
+            } else {
+                ui_menu_aviso("Tecla invalida ou reservada: Esc e Espaco");
+            }
+        }
+        return 1;
+    }
+    if(event->type==SDL_CONTROLLERBUTTONDOWN) {
+        if(dispositivo_controles==1) {
+            if(input_bindings_set_gamepad((InputBindAction)opcao_controles,
+                                          (SDL_GameControllerButton)event->cbutton.button)) {
+                capturando_controle=0;
+                if(!input_bindings_save())
+                    ui_menu_aviso("Alterado, mas nao foi possivel salvar a configuracao");
+            } else ui_menu_aviso("Botao reservado ou indisponivel");
+        }
+        return 1;
+    }
+    /* Ao configurar, nao permitir que o stick mova a selecao por acidente. */
+    if(event->type==SDL_CONTROLLERAXISMOTION) return 1;
+    return 0;
+}
+
 MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
+    if(tela_controles) {
+        if(capturando_controle) return MENU_ACAO_NENHUMA;
+        if(tecla==SDLK_ESCAPE) tela_controles=0;
+        else if(tecla==SDLK_UP)
+            opcao_controles=(opcao_controles+TOTAL_OPCOES_CONTROLES-1)%TOTAL_OPCOES_CONTROLES;
+        else if(tecla==SDLK_DOWN)
+            opcao_controles=(opcao_controles+1)%TOTAL_OPCOES_CONTROLES;
+        else if((tecla==SDLK_LEFT || tecla==SDLK_RIGHT) &&
+                opcao_controles==INPUT_BIND_COUNT)
+            dispositivo_controles=!dispositivo_controles;
+        else if(tecla_confirmar(tecla)) {
+            if(opcao_controles<INPUT_BIND_COUNT)
+                capturando_controle=1;
+            else if(opcao_controles==INPUT_BIND_COUNT)
+                dispositivo_controles=!dispositivo_controles;
+            else if(opcao_controles==INPUT_BIND_COUNT+1) {
+                input_bindings_reset();
+                if(!input_bindings_save())
+                    ui_menu_aviso("Padrao aplicado, mas nao foi possivel salvar");
+            } else tela_controles=0;
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+
     if (tela_previa_wallpaper) {
         if(tecla==SDLK_ESCAPE) { tela_previa_wallpaper=0; preview_custom_path[0]='\0'; }
         else if((tecla==SDLK_LEFT || tecla==SDLK_RIGHT) && !preview_custom_path[0]) {
@@ -586,7 +655,13 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         else if(tecla_confirmar(tecla)) {
             switch(opcao_configuracoes) {
             case 0: mostrar_todos_consoles(); break;
-            case 1: tela_configuracoes=0; break;
+            case 1:
+                tela_controles=1;
+                opcao_controles=0;
+                dispositivo_controles=0;
+                capturando_controle=0;
+                break;
+            case 2: tela_configuracoes=0; break;
             }
         }
         return MENU_ACAO_NENHUMA;
@@ -696,18 +771,22 @@ MenuAcao ui_menu_clique(int mx,int my) {
     obter_tamanho_ui(&vw,&vh);
     if(vw<=0 || vh<=0) return MENU_ACAO_NENHUMA;
     if(tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
-    if(tela_aparencia || tela_configuracoes) {
-        int custom=tela_aparencia;
-        int n=custom?6:2;
-        int pw=custom?360:340;
+    if(tela_aparencia || tela_configuracoes || tela_controles) {
+        if(capturando_controle) return MENU_ACAO_NENHUMA;
+        int controls=tela_controles;
+        int custom=!controls && tela_aparencia;
+        int n=controls?TOTAL_OPCOES_CONTROLES:(custom?6:3);
+        int pw=controls?470:(custom?360:340);
         if(pw>vw-42) pw=vw-42;
-        int ph=custom?390:178;
+        int ph=controls?550:(custom?390:222);
         if(ph>vh-46) ph=vh-46;
         int x=(vw-pw)/2;
         int y=(vh-ph)/2;
-        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*(custom?50:45)) {
-            int item=(my-y-59)/(custom?50:45);
-            if(custom) opcao_aparencia=item;
+        int height=controls?40:(custom?50:45);
+        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*height) {
+            int item=(my-y-59)/height;
+            if(controls) opcao_controles=item;
+            else if(custom) opcao_aparencia=item;
             else opcao_configuracoes=item;
             return ui_menu_tecla(SDLK_RETURN,0);
         }
@@ -748,7 +827,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
     return MENU_ACAO_NENHUMA;
 }
 void ui_menu_rolagem(int direcao) {
-    if(tela_previa_wallpaper || tela_aparencia || tela_configuracoes || !direcao) return;
+    if(tela_previa_wallpaper || tela_aparencia || tela_configuracoes || tela_controles || !direcao) return;
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
@@ -1269,30 +1348,55 @@ void ui_menu_desenhar(void) {
         }
         ui_texto_desenhar_centro("<  PREVIA DO WALLPAPER  >",vw/2,caixa.y+258,1,(SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0});
         ui_texto_desenhar_centro("ENTER Aplicar   ESC Cancelar",vw/2,caixa.y+284,1,(SDL_Color){220,225,235,255},(SDL_Color){0,0,0,0});
-    } else if(tela_configuracoes || tela_aparencia) {
-        const int custom=tela_aparencia;
-        const int n=custom?6:2;
+    } else if(tela_configuracoes || tela_aparencia || tela_controles) {
+        const int controls=tela_controles;
+        const int custom=!controls && tela_aparencia;
+        const int n=controls?TOTAL_OPCOES_CONTROLES:(custom?6:3);
         const int claro=preset_ativo()!=PRESET_LIGHT;
         SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
         SDL_Color fundo=claro?(SDL_Color){236,246,255,255}:(SDL_Color){22,35,72,255};
         SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
-        int pw=custom?360:340;
+        int pw=controls?470:(custom?360:340);
         if(pw>vw-42) pw=vw-42;
-        int ph=custom?390:178;
+        int ph=controls?550:(custom?390:222);
         if(ph>vh-46) ph=vh-46;
-        /* Modal centralizado com veu de fundo; nao depende da lateral. */
+        /* O mesmo modal, contorno e paleta visual aprovados. */
         SDL_Rect painel={(vw-pw)/2,(vh-ph)/2,pw,ph};
         preencher((SDL_Rect){0,0,vw,vh},(SDL_Color){8,12,24,claro?70:120});
         arredondado((SDL_Rect){painel.x+3,painel.y+5,painel.w,painel.h},25,
                     (SDL_Color){10,24,46,35},0);
         arredondado(painel,25,fundo,0);
         arredondado(painel,25,borda,1);
-        ui_texto_desenhar(custom?"APARÊNCIA":"CONFIGURAÇÕES",painel.x+20,
-                          painel.y+17,2,tinta,(SDL_Color){0,0,0,0});
-        int altura_linha=custom?50:45;
+        ui_texto_desenhar(controls?"CONTROLES":custom?"APARÊNCIA":"CONFIGURAÇÕES",
+                          painel.x+20,painel.y+17,2,tinta,(SDL_Color){0,0,0,0});
+        int altura_linha=controls?40:(custom?50:45);
+        static const char *const labels[INPUT_BIND_COUNT]={
+            "Cima", "Baixo", "Esquerda", "Direita", "Botao A", "Botao B",
+            "Start", "Select"
+        };
         for(int i=0;i<n;++i) {
             char nome[150];
-            if(custom) {
+            if(controls) {
+                if(i<INPUT_BIND_COUNT) {
+                    if(capturando_controle && i==opcao_controles) {
+                        snprintf(nome,sizeof(nome),"%s: Pressione %s...",
+                                 labels[i],dispositivo_controles?"um botao":"uma tecla");
+                    } else {
+                        const char *keyname=dispositivo_controles
+                            ? SDL_GameControllerGetStringForButton(
+                                  input_bindings_gamepad((InputBindAction)i))
+                            : SDL_GetScancodeName(
+                                  input_bindings_keyboard((InputBindAction)i));
+                        snprintf(nome,sizeof(nome),"%s: %s",
+                                 labels[i],keyname?keyname:"?");
+                    }
+                } else if(i==INPUT_BIND_COUNT)
+                    snprintf(nome,sizeof(nome),"Dispositivo: %s",
+                             dispositivo_controles?"Controle":"Teclado");
+                else if(i==INPUT_BIND_COUNT+1)
+                    snprintf(nome,sizeof(nome),"Restaurar botoes padrao");
+                else snprintf(nome,sizeof(nome),"Voltar");
+            } else if(custom) {
                 switch(i) {
                 case 0: snprintf(nome,sizeof(nome),"Contraste automático: %s",contraste_automatico?"Ligado":"Desligado"); break;
                 case 1: snprintf(nome,sizeof(nome),"Preset manual: %s",nomes_presets[manual_preset]); break;
@@ -1305,10 +1409,13 @@ void ui_menu_desenhar(void) {
                 default: snprintf(nome,sizeof(nome),"Voltar");
                 }
             } else {
-                snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":"Voltar");
+                snprintf(nome,sizeof(nome),"%s",
+                         i==0?"Restaurar consoles ocultos":
+                         i==1?"Remapear controles":"Voltar");
             }
             SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,painel.w-22,altura_linha-6};
-            if((custom?opcao_aparencia:opcao_configuracoes)==i) {
+            if((controls?opcao_controles:
+                 custom?opcao_aparencia:opcao_configuracoes)==i) {
                 /* Sem camada escura atras da legenda selecionada. */
                 SDL_Color borda_ativa=preset_ativo()==PRESET_COLORFUL
                     ? (SDL_Color){0xC8,0x46,0x82,235}
@@ -1318,6 +1425,10 @@ void ui_menu_desenhar(void) {
             }
             ui_texto_desenhar(nome,linha.x+11,linha.y+10,1,tinta,(SDL_Color){0,0,0,0});
         }
+        if(controls)
+            ui_texto_desenhar(capturando_controle?"ESC cancela a captura":
+                              "ESC sai  |  ESC/Espaco voltam do jogo",
+                              painel.x+20,painel.y+ph-23,1,tinta,(SDL_Color){0,0,0,0});
 
     }
 }

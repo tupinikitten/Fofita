@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "libretro.h"
 #include "input_rules.h"
+#include "input_bindings.h"
 
 extern bool em_menu; 
 
@@ -10,60 +11,49 @@ void retro_input_poll_cb(void) {
     SDL_PumpEvents(); 
 }
 
-int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id) { 
-    if (em_menu) return 0;
-    
-    if (port != 0 || device != RETRO_DEVICE_JOYPAD || index != 0) return 0;
-    
-    const Uint8 *teclas = SDL_GetKeyboardState(NULL);
-    /* GameController padrao SDL2: o mesmo mapeamento em Windows/Linux/portateis. */
-    SDL_GameController *pad = NULL;
-    for (int i=0; i<SDL_NumJoysticks(); ++i) {
-        if (SDL_IsGameController(i)) {pad=SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(i)); if(pad) break;}
-    }
-    if(pad) {
-        SDL_GameControllerButton btn=SDL_CONTROLLER_BUTTON_INVALID;
-        switch(id) {
-        case RETRO_DEVICE_ID_JOYPAD_UP: btn=SDL_CONTROLLER_BUTTON_DPAD_UP; break;
-        case RETRO_DEVICE_ID_JOYPAD_DOWN: btn=SDL_CONTROLLER_BUTTON_DPAD_DOWN; break;
-        case RETRO_DEVICE_ID_JOYPAD_LEFT: btn=SDL_CONTROLLER_BUTTON_DPAD_LEFT; break;
-        case RETRO_DEVICE_ID_JOYPAD_RIGHT: btn=SDL_CONTROLLER_BUTTON_DPAD_RIGHT; break;
-        case RETRO_DEVICE_ID_JOYPAD_START: btn=SDL_CONTROLLER_BUTTON_START; break;
-        case RETRO_DEVICE_ID_JOYPAD_SELECT: btn=SDL_CONTROLLER_BUTTON_BACK; break;
-        case RETRO_DEVICE_ID_JOYPAD_A: btn=SDL_CONTROLLER_BUTTON_A; break;
-        case RETRO_DEVICE_ID_JOYPAD_B: btn=SDL_CONTROLLER_BUTTON_B; break;
-        default: break;
-        }
-        if(btn!=SDL_CONTROLLER_BUTTON_INVALID && SDL_GameControllerGetButton(pad,btn)) return 1;
-        /* O dashboard aceita o analogico, mas o jogo so lia o D-pad.
-           Traduzir o stick esquerdo para as quatro direcoes Libretro. */
-        Sint16 axis_x=SDL_GameControllerGetAxis(pad,SDL_CONTROLLER_AXIS_LEFTX);
-        Sint16 axis_y=SDL_GameControllerGetAxis(pad,SDL_CONTROLLER_AXIS_LEFTY);
-        switch(id) {
-        case RETRO_DEVICE_ID_JOYPAD_UP:
-            if(input_stick_direction(axis_y,false)) return 1;
-            break;
-        case RETRO_DEVICE_ID_JOYPAD_DOWN:
-            if(input_stick_direction(axis_y,true)) return 1;
-            break;
-        case RETRO_DEVICE_ID_JOYPAD_LEFT:
-            if(input_stick_direction(axis_x,false)) return 1;
-            break;
-        case RETRO_DEVICE_ID_JOYPAD_RIGHT:
-            if(input_stick_direction(axis_x,true)) return 1;
-            break;
-        default: break;
+int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id) {
+    if(em_menu || port!=0 || device!=RETRO_DEVICE_JOYPAD || index!=0)
+        return 0;
+
+    /* O mesmo mapa e usado para qualquer core: NES, GB/GBC e futuros.
+       O remapeamento nao interfere com foco/atalhos do dashboard. */
+    static const unsigned ids[INPUT_BIND_COUNT]={
+        RETRO_DEVICE_ID_JOYPAD_UP, RETRO_DEVICE_ID_JOYPAD_DOWN,
+        RETRO_DEVICE_ID_JOYPAD_LEFT, RETRO_DEVICE_ID_JOYPAD_RIGHT,
+        RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_B,
+        RETRO_DEVICE_ID_JOYPAD_START, RETRO_DEVICE_ID_JOYPAD_SELECT
+    };
+    int action=-1;
+    for(int a=0;a<INPUT_BIND_COUNT;++a)
+        if(id==ids[a]) { action=a; break; }
+    if(action<0) return 0;
+
+    const Uint8 *keyboard=SDL_GetKeyboardState(NULL);
+    SDL_Scancode scancode=input_bindings_keyboard((InputBindAction)action);
+    if(keyboard && scancode>SDL_SCANCODE_UNKNOWN && scancode<SDL_NUM_SCANCODES &&
+       keyboard[scancode]) return 1;
+
+    SDL_GameController *pad=NULL;
+    for(int j=0;j<SDL_NumJoysticks();++j) {
+        if(SDL_IsGameController(j)) {
+            pad=SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(j));
+            if(pad) break;
         }
     }
-    switch (id) {
-        case RETRO_DEVICE_ID_JOYPAD_UP:     return teclas[SDL_SCANCODE_UP];
-        case RETRO_DEVICE_ID_JOYPAD_DOWN:   return teclas[SDL_SCANCODE_DOWN];
-        case RETRO_DEVICE_ID_JOYPAD_LEFT:   return teclas[SDL_SCANCODE_LEFT];
-        case RETRO_DEVICE_ID_JOYPAD_RIGHT:  return teclas[SDL_SCANCODE_RIGHT];
-        case RETRO_DEVICE_ID_JOYPAD_START:  return teclas[SDL_SCANCODE_RETURN];
-        case RETRO_DEVICE_ID_JOYPAD_SELECT: return teclas[SDL_SCANCODE_RSHIFT];
-        case RETRO_DEVICE_ID_JOYPAD_A:      return teclas[SDL_SCANCODE_X];
-        case RETRO_DEVICE_ID_JOYPAD_B:      return teclas[SDL_SCANCODE_Z];
-        default: return 0;
+    if(!pad) return 0;
+    SDL_GameControllerButton button=input_bindings_gamepad((InputBindAction)action);
+    if(button!=SDL_CONTROLLER_BUTTON_INVALID && SDL_GameControllerGetButton(pad,button))
+        return 1;
+
+    /* Analógico esquerdo permanece um segundo direcional, independente
+       do botao fisico escolhido para UP/DOWN/LEFT/RIGHT. */
+    Sint16 ax=SDL_GameControllerGetAxis(pad,SDL_CONTROLLER_AXIS_LEFTX);
+    Sint16 ay=SDL_GameControllerGetAxis(pad,SDL_CONTROLLER_AXIS_LEFTY);
+    switch(action) {
+    case INPUT_BIND_UP: return input_stick_direction(ay,false);
+    case INPUT_BIND_DOWN: return input_stick_direction(ay,true);
+    case INPUT_BIND_LEFT: return input_stick_direction(ax,false);
+    case INPUT_BIND_RIGHT: return input_stick_direction(ax,true);
+    default: return 0;
     }
 }

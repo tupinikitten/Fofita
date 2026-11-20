@@ -17,6 +17,9 @@ void ui_menu_fechar(void);
 /* Navegacao por teclado. Devolve o que o main precisa fazer em seguida. */
 MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores);
 
+/* Retorna 1 quando o remapeamento consumiu o evento SDL bruto. */
+int ui_menu_capturar_remapeamento(const SDL_Event *event);
+
 void ui_menu_desenhar(void);
 
 /* Console selecionado no cabecalho (NULL se nenhum estiver visivel). */

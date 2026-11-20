@@ -6,6 +6,7 @@
 #include "game_session.h"
 #include "input.h"
 #include "input_rules.h"
+#include "input_bindings.h"
 #include "console_registry.h"
 #include "ui_carousel.h"
 #include "ui_menu.h"
@@ -92,6 +93,7 @@ int main(int argc, char *argv[]) {
 
     if (!init_video_audio()) return 1;
 
+    input_bindings_initialize(); /* Carrega preferencia antes do primeiro jogo. */
     init_carousel();
 
     if (!ui_menu_init()) {
@@ -111,6 +113,9 @@ int main(int argc, char *argv[]) {
 
     while (rodando) {
         while (SDL_PollEvent(&event)) {
+            /* A captura de botao deve receber o evento BRUTO: nao traduzir
+               gamepad em Enter/Esc enquanto Configuracoes espera uma entrada. */
+            if(em_menu && ui_menu_capturar_remapeamento(&event)) continue;
             if (event.type == SDL_QUIT) {
                 rodando = false;
                 continue;
