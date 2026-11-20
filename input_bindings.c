@@ -60,7 +60,7 @@ bool input_bindings_set_keyboard(InputBindAction action, SDL_Scancode key) {
     if(!valid_action(action) || !valid_keyboard(key)) return false;
     SDL_Scancode previous=keys[action];
     for(int i=0; i<INPUT_BIND_COUNT; ++i)
-        if(i != action && keys[i] == key) {
+        if(i != (int)action && keys[i] == key) {
             keys[i]=previous;
             break;
         }
@@ -72,7 +72,7 @@ bool input_bindings_set_gamepad(InputBindAction action, SDL_GameControllerButton
     if(!valid_action(action) || !valid_gamepad(button)) return false;
     SDL_GameControllerButton previous=buttons[action];
     for(int i=0; i<INPUT_BIND_COUNT; ++i)
-        if(i != action && buttons[i] == button) {
+        if(i != (int)action && buttons[i] == button) {
             buttons[i]=previous;
             break;
         }
