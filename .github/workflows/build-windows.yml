@@ -89,7 +89,7 @@ jobs:
         run: |
           set -euo pipefail
           gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o input-rules-test.exe \
-            input_rules.c tests/test_input_rules.c $(pkg-config --cflags sdl2)
+            input_rules.c tests/test_input_rules.c $(pkg-config --cflags --libs sdl2)
           ./input-rules-test.exe
 
       - name: Montar pacote Windows com bibliotecas
