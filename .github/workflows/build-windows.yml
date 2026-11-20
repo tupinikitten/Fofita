@@ -63,6 +63,13 @@ jobs:
             console_registry.c tests/test_console_registry.c
           ./b12-registry-test.exe
 
+      - name: Testar fallback de cartao digital (GB/GBC)
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o b12-game-view-test.exe \
+            ui_game_view.c tests/test_game_view.c
+          ./b12-game-view-test.exe
+
       - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail
@@ -75,8 +82,10 @@ jobs:
 
           # Pastas vazias nao sao preservadas pelo Git. Criar pasta de ROMs
           # para testes locais, sem distribuir jogos de terceiros.
-          mkdir -p dist/Fofita/roms/nes
+          mkdir -p dist/Fofita/roms/{nes,gb,gbc}
           printf 'Coloque suas ROMs .nes nesta pasta para testa-las.\n' > dist/Fofita/roms/nes/LEIA-ME.txt
+          printf 'Coloque suas ROMs .gb ou .dmg nesta pasta e instale gambatte_libretro.dll em cores/.\n' > dist/Fofita/roms/gb/LEIA-ME.txt
+          printf 'Coloque suas ROMs .gbc nesta pasta e instale gambatte_libretro.dll em cores/.\n' > dist/Fofita/roms/gbc/LEIA-ME.txt
 
           # Nao publicar arquivos de estilo antigos nem presets incompletos.
           # Os 18 PNGs canonicos sao obrigatorios neste pacote.

@@ -253,11 +253,6 @@ const char *obter_caminho_jogo_atual(void) {
 
 static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
     /* Mesma selecao e mesma lista de jogos: somente troca o renderizador. */
-    if(ui_game_view_get()==GAME_VIEW_CARD) {
-        ui_cards_desenhar(renderer,jogos[index].arte_capa,jogos[index].nome_arquivo,
-                          pos_molde,intensidade,intensidade==255);
-        return;
-    }
     const ConsoleConfig *sis = jogos[index].sistema;
     SDL_Texture *molde = NULL;
 
@@ -266,6 +261,14 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
             molde = runtime_consoles[i].textura_molde;
             break;
         }
+    }
+
+    /* GB/GBC ainda nao possuem molde. Mesmo no modo cartucho, exibir
+       card digital em vez de um espaco vazio; o NES nao muda. */
+    if(ui_game_view_use_card(molde != NULL)) {
+        ui_cards_desenhar(renderer,jogos[index].arte_capa,jogos[index].nome_arquivo,
+                          pos_molde,intensidade,intensidade==255);
+        return;
     }
 
     /* Tamanho de referencia do molde: o do PNG carregado (real). O valor do
