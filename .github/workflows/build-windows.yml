@@ -85,6 +85,13 @@ jobs:
             save_manager.c tests/test_save_manager.c
           ./b21-sram-test.exe
 
+      - name: Testar comandos do controle sem interferir no jogo
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o input-rules-test.exe \
+            input_rules.c tests/test_input_rules.c $(pkg-config --cflags sdl2)
+          ./input-rules-test.exe
+
       - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail

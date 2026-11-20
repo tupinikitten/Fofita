@@ -2,6 +2,7 @@
 #include <SDL2/SDL.h>
 #include <stdbool.h>
 #include "libretro.h"
+#include "input_rules.h"
 
 extern bool em_menu; 
 
@@ -34,6 +35,25 @@ int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, uns
         default: break;
         }
         if(btn!=SDL_CONTROLLER_BUTTON_INVALID && SDL_GameControllerGetButton(pad,btn)) return 1;
+        /* O dashboard aceita o analogico, mas o jogo so lia o D-pad.
+           Traduzir o stick esquerdo para as quatro direcoes Libretro. */
+        Sint16 axis_x=SDL_GameControllerGetAxis(pad,SDL_CONTROLLER_AXIS_LEFTX);
+        Sint16 axis_y=SDL_GameControllerGetAxis(pad,SDL_CONTROLLER_AXIS_LEFTY);
+        switch(id) {
+        case RETRO_DEVICE_ID_JOYPAD_UP:
+            if(input_stick_direction(axis_y,false)) return 1;
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_DOWN:
+            if(input_stick_direction(axis_y,true)) return 1;
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_LEFT:
+            if(input_stick_direction(axis_x,false)) return 1;
+            break;
+        case RETRO_DEVICE_ID_JOYPAD_RIGHT:
+            if(input_stick_direction(axis_x,true)) return 1;
+            break;
+        default: break;
+        }
     }
     switch (id) {
         case RETRO_DEVICE_ID_JOYPAD_UP:     return teclas[SDL_SCANCODE_UP];

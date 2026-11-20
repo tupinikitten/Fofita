@@ -5,6 +5,7 @@
 #include "video_audio.h"
 #include "game_session.h"
 #include "input.h"
+#include "input_rules.h"
 #include "console_registry.h"
 #include "ui_carousel.h"
 #include "ui_menu.h"
@@ -166,6 +167,22 @@ int main(int argc, char *argv[]) {
                 mod=event.key.keysym.mod;
                 repetir=event.key.repeat;
             } else if(event.type==SDL_CONTROLLERBUTTONDOWN) {
+                /* Durante a partida, SDL entrega os botoes diretamente
+                   ao core via input.c. NUNCA converter B em ESC aqui:
+                   Zelda e Pokemon precisam de B em seus menus de jogo.
+                   Para sair pelo gamepad, pressione Back+Start juntos. */
+                if(!em_menu) {
+                    if(controle &&
+                       SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controle))==
+                       event.cbutton.which &&
+                       input_gamepad_exit_combo(
+                           true,
+                           (SDL_GameControllerButton)event.cbutton.button,
+                           SDL_GameControllerGetButton(controle,SDL_CONTROLLER_BUTTON_START)!=0,
+                           SDL_GameControllerGetButton(controle,SDL_CONTROLLER_BUTTON_BACK)!=0))
+                        voltar_ao_menu();
+                    continue;
+                }
                 switch(event.cbutton.button) {
                 case SDL_CONTROLLER_BUTTON_DPAD_LEFT: tecla=SDLK_LEFT; break;
                 case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: tecla=SDLK_RIGHT; break;
