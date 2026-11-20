@@ -12,6 +12,9 @@ int main(int argc, char **argv) {
     assert(input_bindings_gamepad(INPUT_BIND_SELECT)==SDL_CONTROLLER_BUTTON_BACK);
     assert(!input_bindings_set_keyboard(INPUT_BIND_A,SDL_SCANCODE_ESCAPE));
     assert(!input_bindings_set_keyboard(INPUT_BIND_A,SDL_SCANCODE_SPACE));
+    assert(!input_bindings_set_keyboard(INPUT_BIND_A,SDL_SCANCODE_F5));
+    assert(!input_bindings_set_keyboard(INPUT_BIND_A,SDL_SCANCODE_F6));
+    assert(!input_bindings_set_keyboard(INPUT_BIND_A,SDL_SCANCODE_F8));
     assert(!input_bindings_set_gamepad(INPUT_BIND_B,SDL_CONTROLLER_BUTTON_GUIDE));
     assert(!input_bindings_set_keyboard((InputBindAction)99,SDL_SCANCODE_A));
 

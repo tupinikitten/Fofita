@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include "state_store.h"
 
 /* Snapshot depois de retro_load_game. API de cheats presente nao garante
    que um determinado codigo de cheat sera aceito pelo nucleo. */
@@ -18,6 +19,10 @@ const CoreCapabilities *core_get_capabilities(void);
 bool init_core(const char* core_path);
 bool load_game(const char* game_path);
 void run_core(void);
+/* B2.2: chamadas somente na thread de emulacao, apos o primeiro quadro.
+   Nunca alteram o jogo quando nao ha slot valido. */
+StateIOResult core_save_state(unsigned slot);
+StateIOResult core_load_state(unsigned slot);
 void unload_game(void);
 void close_core(void);
 

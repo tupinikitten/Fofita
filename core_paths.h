@@ -8,6 +8,7 @@
 bool core_paths_init(const char *root);
 const char *core_paths_system_dir(void);
 const char *core_paths_save_dir(void);
+const char *core_paths_state_dir(void);
 void core_paths_clear(void);
 
 #endif

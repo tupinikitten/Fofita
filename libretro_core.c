@@ -4,6 +4,7 @@
 #include "core_content.h"
 #include "core_paths.h"
 #include "save_manager.h"
+#include "state_store.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
@@ -41,6 +42,9 @@ static void (*api_cheat_set)(unsigned,bool,const char*) = NULL;
 static CoreCapabilities capacidades;
 static SaveRamSession sram_atual;
 static char nome_core_atual[256];
+static char caminho_core_atual[1024];
+static StateStore states_atual;
+static bool estado_tem_quadro = false;
 static Uint32 ultimo_checkpoint_sram = 0;
 
 /* Consulta a regiao Libretro em cada checkpoint: o core pode mudar os
@@ -71,7 +75,7 @@ static void atualizar_capacidades(void) {
     if(!jogo_carregado) return;
     if(api_serialize_size && api_serialize && api_unserialize) {
         size_t size = api_serialize_size();
-        if(size > 0) {
+        if(size > 0 && size <= FOFITA_STATE_MAX_BYTES) {
             capacidades.save_states_available = true;
             capacidades.save_state_bytes = size;
         }
@@ -142,7 +146,10 @@ bool init_core(const char* core_path) {
     precisa_caminho_completo = false;
     core_inicializado = false;
     save_ram_end(&sram_atual);
+    state_store_clear(&states_atual);
     nome_core_atual[0]='\0';
+    caminho_core_atual[0]='\0';
+    estado_tem_quadro=false;
     ultimo_checkpoint_sram=0;
     core_paths_clear();
     core_dll = LoadLibraryA(core_path);
@@ -214,6 +221,7 @@ bool init_core(const char* core_path) {
     for(const char *p=core_path; *p; ++p)
         if(*p=='/' || *p=='\\') basename=p+1;
     snprintf(nome_core_atual,sizeof(nome_core_atual),"%s",basename);
+    snprintf(caminho_core_atual,sizeof(caminho_core_atual),"%s",core_path);
     return true;
 }
 
@@ -239,6 +247,17 @@ bool load_game(const char* game_path) {
 
     jogo_carregado = 1;
     atualizar_capacidades();
+    estado_tem_quadro=false;
+
+    /* Savestates usam outra pasta e identificacao por bytes ROM/core.
+       Nenhuma falha aqui impede que o jogo ou o SRAM funcionem. */
+    if(api_serialize_size && api_serialize && api_unserialize &&
+       !state_store_init(&states_atual,core_paths_state_dir(),
+                         caminho_core_atual,game_path)) {
+        capacidades.save_states_available=false;
+        capacidades.save_state_bytes=0;
+        fprintf(stderr,"Aviso: savestates indisponiveis (diretorio ou fingerprint).\n");
+    }
 
     /* Restaurar SRAM somente apos retro_load_game, quando o core anuncia
        tamanho e ponteiro validos. Falhas no save nao bloqueiam o jogo. */
@@ -260,6 +279,11 @@ bool load_game(const char* game_path) {
 void run_core(void) {
     if(!jogo_carregado || !core_run_ptr) return;
     core_run_ptr();
+    if(!estado_tem_quadro) {
+        estado_tem_quadro=true;
+        /* Alguns cores so anunciam o tamanho depois do primeiro frame. */
+        if(states_atual.active) atualizar_capacidades();
+    }
 
     /* Periodico (~30 s em tempo real), somente se SRAM mudou. */
     Uint32 agora=SDL_GetTicks();
@@ -269,10 +293,49 @@ void run_core(void) {
     }
 }
 
+/* Savestates nao sao SRAM: nunca escrever nesses slots automaticamente.
+   O salvamento so e feito por uma acao explicita do usuario. */
+StateIOResult core_save_state(unsigned slot) {
+    if(!jogo_carregado || !estado_tem_quadro || !states_atual.active ||
+       !api_serialize_size || !api_serialize || !api_unserialize ||
+       slot<1 || slot>FOFITA_STATE_SLOTS)
+        return STATE_IO_UNSUPPORTED;
+
+    size_t size=api_serialize_size();
+    if(!size || size>FOFITA_STATE_MAX_BYTES) return STATE_IO_UNSUPPORTED;
+    void *bytes=malloc(size);
+    if(!bytes) return STATE_IO_ERROR;
+    StateIOResult result=STATE_IO_ERROR;
+    if(api_serialize(bytes,size))
+        result=state_store_write(&states_atual,slot,bytes,size);
+    free(bytes);
+    return result;
+}
+
+StateIOResult core_load_state(unsigned slot) {
+    if(!jogo_carregado || !estado_tem_quadro || !states_atual.active ||
+       !api_serialize_size || !api_serialize || !api_unserialize ||
+       slot<1 || slot>FOFITA_STATE_SLOTS)
+        return STATE_IO_UNSUPPORTED;
+
+    size_t size=api_serialize_size();
+    if(!size || size>FOFITA_STATE_MAX_BYTES) return STATE_IO_UNSUPPORTED;
+    void *bytes=malloc(size);
+    if(!bytes) return STATE_IO_ERROR;
+    /* Nao chamar unserialize se arquivo nao passou todas verificacoes. */
+    StateIOResult result=state_store_read(&states_atual,slot,bytes,size);
+    if(result==STATE_IO_OK && !api_unserialize(bytes,size))
+        result=STATE_IO_INCOMPATIBLE;
+    free(bytes);
+    return result;
+}
+
 /* Descarrega o jogo atual (se houver) e libera a memoria da ROM. */
 void unload_game(void) {
     if(jogo_carregado) salvar_sram_se_modificada();
     save_ram_end(&sram_atual);
+    state_store_clear(&states_atual);
+    estado_tem_quadro=false;
     ultimo_checkpoint_sram=0;
     if (jogo_carregado && core_unload_game) core_unload_game();
     jogo_carregado = 0;
@@ -287,6 +350,7 @@ void close_core(void) {
     core_dll = NULL;
     core_inicializado = false;
     nome_core_atual[0]='\0';
+    caminho_core_atual[0]='\0';
     precisa_caminho_completo = false;
     api_get_system_info = NULL;
     core_paths_clear();

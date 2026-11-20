@@ -13,6 +13,7 @@
 #define CORE_PATH_MAX 1024
 static char system_path[CORE_PATH_MAX];
 static char save_path[CORE_PATH_MAX];
+static char state_path[CORE_PATH_MAX];
 
 static bool ensure_directory(const char *path) {
     struct stat st;
@@ -28,6 +29,7 @@ static bool ensure_directory(const char *path) {
 void core_paths_clear(void) {
     system_path[0]='\0';
     save_path[0]='\0';
+    state_path[0]='\0';
 }
 
 bool core_paths_init(const char *root) {
@@ -36,15 +38,19 @@ bool core_paths_init(const char *root) {
 
     size_t n=strlen(root);
     const char *sep=(root[n-1]=='/' || root[n-1]=='\\') ? "" : "/";
-    char sys[CORE_PATH_MAX],save[CORE_PATH_MAX];
+    char sys[CORE_PATH_MAX],save[CORE_PATH_MAX],states[CORE_PATH_MAX];
     int a=snprintf(sys,sizeof(sys),"%s%ssystem",root,sep);
     int b=snprintf(save,sizeof(save),"%s%ssaves",root,sep);
-    if(a<0 || b<0 || (size_t)a>=sizeof(sys) || (size_t)b>=sizeof(save))
+    int c=snprintf(states,sizeof(states),"%s%sstates",root,sep);
+    if(a<0 || b<0 || c<0 || (size_t)a>=sizeof(sys) ||
+       (size_t)b>=sizeof(save) || (size_t)c>=sizeof(states))
         return false;
-    if(!ensure_directory(sys) || !ensure_directory(save)) return false;
+    if(!ensure_directory(sys) || !ensure_directory(save) ||
+       !ensure_directory(states)) return false;
 
     memcpy(system_path,sys,(size_t)a+1);
     memcpy(save_path,save,(size_t)b+1);
+    memcpy(state_path,states,(size_t)c+1);
     return true;
 }
 const char *core_paths_system_dir(void) {
@@ -52,4 +58,7 @@ const char *core_paths_system_dir(void) {
 }
 const char *core_paths_save_dir(void) {
     return save_path[0] ? save_path : NULL;
+}
+const char *core_paths_state_dir(void) {
+    return state_path[0] ? state_path : NULL;
 }

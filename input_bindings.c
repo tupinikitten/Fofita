@@ -37,7 +37,9 @@ static bool valid_action(InputBindAction a) {
 }
 static bool valid_keyboard(SDL_Scancode k) {
     return k > SDL_SCANCODE_UNKNOWN && k < SDL_NUM_SCANCODES &&
-           k != SDL_SCANCODE_ESCAPE && k != SDL_SCANCODE_SPACE;
+           k != SDL_SCANCODE_ESCAPE && k != SDL_SCANCODE_SPACE &&
+           k != SDL_SCANCODE_F5 && k != SDL_SCANCODE_F6 &&
+           k != SDL_SCANCODE_F8;
 }
 static bool valid_gamepad(SDL_GameControllerButton b) {
     return b >= SDL_CONTROLLER_BUTTON_A && b < SDL_CONTROLLER_BUTTON_MAX &&

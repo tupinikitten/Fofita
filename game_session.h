@@ -33,4 +33,10 @@ bool game_session_set_paused(bool paused);
 void game_session_run_frame(void);
 void game_session_stop(void);
 
+/* Tres slots por jogo. A selecao reinicia em 1 a cada novo jogo. */
+unsigned game_session_state_slot(void);
+unsigned game_session_next_state_slot(void);
+StateIOResult game_session_save_state(void);
+StateIOResult game_session_load_state(void);
+
 #endif

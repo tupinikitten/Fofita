@@ -14,6 +14,12 @@
 
 /* true enquanto o menu esta na tela; input.c usa isto para nao repassar teclas ao jogo. */
 bool em_menu = true;
+/* Feedback provisório na barra de titulo, sem alterar o dashboard. */
+static Uint32 titulo_estado_ate=0;
+static void aviso_savestate(const char *texto) {
+    SDL_SetWindowTitle(window,texto);
+    titulo_estado_ate=SDL_GetTicks()+2600u;
+}
 
 /*
  * Desenha o frame do Libretro sem alterar sua proporcao.
@@ -88,6 +94,8 @@ static void voltar_ao_menu(void) {
     input_latch_reset();
     em_menu = true;
     ui_menu_focar_carrossel();  /* o cartucho do jogo que acabou de rodar continua em foco */
+    SDL_SetWindowTitle(window,"Fofita");
+    titulo_estado_ate=0;
 }
 
 int main(int argc, char *argv[]) {
@@ -223,11 +231,38 @@ int main(int argc, char *argv[]) {
                     iniciar_apos=SDL_GetTicks()+380;
                 }
                 else if (acao == MENU_ACAO_SAIR) rodando = false;
+            } else if(tecla==SDLK_F5 || tecla==SDLK_F6 || tecla==SDLK_F8) {
+                if(repetir) continue; /* atalhos so por novo toque */
+                unsigned slot=game_session_state_slot();
+                char mensagem[192];
+                if(tecla==SDLK_F6) {
+                    slot=game_session_next_state_slot();
+                    snprintf(mensagem,sizeof(mensagem),"Fofita | Savestate slot %u/3 selecionado",slot);
+                } else {
+                    StateIOResult result=tecla==SDLK_F5
+                        ? game_session_save_state() : game_session_load_state();
+                    if(result==STATE_IO_OK && tecla==SDLK_F8) {
+                        limpar_audio(); /* remove audio anterior ao estado restaurado */
+                        input_latch_reset();
+                    }
+                    snprintf(mensagem,sizeof(mensagem),
+                             "Fofita | Slot %u: %s - %s",slot,
+                             tecla==SDLK_F5?"salvar":"carregar",
+                             state_io_description(result));
+                    printf("Savestate: slot %u, %s: %s\n",slot,
+                           tecla==SDLK_F5?"salvar":"carregar",
+                           state_io_description(result));
+                }
+                aviso_savestate(mensagem);
             } else if (tecla == SDLK_SPACE || tecla == SDLK_ESCAPE) {
                 voltar_ao_menu();
             }
         }
 
+        if(titulo_estado_ate && (Sint32)(SDL_GetTicks()-titulo_estado_ate)>=0) {
+            titulo_estado_ate=0;
+            SDL_SetWindowTitle(window,"Fofita");
+        }
         if (em_menu && iniciar_apos && SDL_GetTicks()>=iniciar_apos) {
             iniciar_apos=0;
             iniciar_jogo_atual();
