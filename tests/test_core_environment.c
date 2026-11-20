@@ -31,7 +31,9 @@ int16_t retro_input_state_cb(unsigned port, unsigned device,
     return 0;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     bool can_dupe = false;
     /* O Gambatte so aceita carregar ROMs quando esta consulta retorna
        true e preenche a variavel booleana com true. */
