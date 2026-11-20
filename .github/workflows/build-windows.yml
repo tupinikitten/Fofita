@@ -78,6 +78,13 @@ jobs:
             $(pkg-config --cflags --libs sdl2 SDL2_image)
           ./gambatte-env-test.exe
 
+      - name: Testar SRAM persistente (B2.1)
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o b21-sram-test.exe \
+            save_manager.c tests/test_save_manager.c
+          ./b21-sram-test.exe
+
       - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail

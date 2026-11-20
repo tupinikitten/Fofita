@@ -3,6 +3,7 @@
 #include "libretro.h"
 #include "core_content.h"
 #include "core_paths.h"
+#include "save_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
@@ -28,7 +29,6 @@ static bool precisa_caminho_completo = false;
 static bool core_inicializado = false;
 static void (*api_get_system_info)(struct retro_system_info*) = NULL;
 static int jogo_carregado = 0;
-
 /* Funcoes opcionais: nao tornam invalido um core que nao as exporta.
    Os recursos reais sao consultados somente depois de carregar o jogo. */
 static size_t (*api_serialize_size)(void) = NULL;
@@ -39,6 +39,28 @@ static size_t (*api_get_memory_size)(unsigned) = NULL;
 static void (*api_cheat_reset)(void) = NULL;
 static void (*api_cheat_set)(unsigned,bool,const char*) = NULL;
 static CoreCapabilities capacidades;
+static SaveRamSession sram_atual;
+static char nome_core_atual[256];
+static Uint32 ultimo_checkpoint_sram = 0;
+
+/* Consulta a regiao Libretro em cada checkpoint: o core pode mudar os
+   ponteiros entre jogos ou durante a execucao. Nunca salvar depois de
+   retro_unload_game(), pois nesse momento a SRAM ja pode ser invalida. */
+static void salvar_sram_se_modificada(void) {
+    if(!sram_atual.active) return;
+    if(!api_get_memory_data || !api_get_memory_size) return;
+    size_t size=api_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+    void *ram=api_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+    if(!ram || size!=sram_atual.size) {
+        fprintf(stderr,"Aviso: regiao SRAM do core mudou; salvamento desativado nesta sessao.\n");
+        save_ram_end(&sram_atual);
+        return;
+    }
+    if(!save_ram_checkpoint(&sram_atual,ram,size))
+        fprintf(stderr,"Aviso: falha ao gravar SRAM; arquivo anterior preservado.\n");
+}
+
+
 
 const CoreCapabilities *core_get_capabilities(void) {
     return &capacidades;
@@ -119,6 +141,9 @@ bool init_core(const char* core_path) {
     capacidades = (CoreCapabilities){0};
     precisa_caminho_completo = false;
     core_inicializado = false;
+    save_ram_end(&sram_atual);
+    nome_core_atual[0]='\0';
+    ultimo_checkpoint_sram=0;
     core_paths_clear();
     core_dll = LoadLibraryA(core_path);
     if (!core_dll) {
@@ -184,6 +209,11 @@ bool init_core(const char* core_path) {
 
     core_init();
     core_inicializado = true;
+    /* Para isolar saves por implementacao, nao por versao da DLL. */
+    const char *basename=core_path;
+    for(const char *p=core_path; *p; ++p)
+        if(*p=='/' || *p=='\\') basename=p+1;
+    snprintf(nome_core_atual,sizeof(nome_core_atual),"%s",basename);
     return true;
 }
 
@@ -209,15 +239,41 @@ bool load_game(const char* game_path) {
 
     jogo_carregado = 1;
     atualizar_capacidades();
+
+    /* Restaurar SRAM somente apos retro_load_game, quando o core anuncia
+       tamanho e ponteiro validos. Falhas no save nao bloqueiam o jogo. */
+    if(capacidades.save_ram_available) {
+        void *ram=api_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+        size_t size=api_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        SaveRamStartResult result=save_ram_begin(
+            &sram_atual,core_paths_save_dir(),nome_core_atual,game_path,
+            ram,size);
+        if(result==SAVE_RAM_RESTORED)
+            printf("SRAM: progresso restaurado para %s\n",game_path);
+        else if(result==SAVE_RAM_BLOCKED)
+            fprintf(stderr,"Aviso: SRAM existente invalida ou inacessivel; nao sera sobrescrita.\n");
+    }
+    ultimo_checkpoint_sram=SDL_GetTicks();
     return true;
 }
 
 void run_core(void) {
-    if (core_run_ptr) core_run_ptr();
+    if(!jogo_carregado || !core_run_ptr) return;
+    core_run_ptr();
+
+    /* Periodico (~30 s em tempo real), somente se SRAM mudou. */
+    Uint32 agora=SDL_GetTicks();
+    if((Uint32)(agora-ultimo_checkpoint_sram)>=30000u) {
+        salvar_sram_se_modificada();
+        ultimo_checkpoint_sram=agora;
+    }
 }
 
 /* Descarrega o jogo atual (se houver) e libera a memoria da ROM. */
 void unload_game(void) {
+    if(jogo_carregado) salvar_sram_se_modificada();
+    save_ram_end(&sram_atual);
+    ultimo_checkpoint_sram=0;
     if (jogo_carregado && core_unload_game) core_unload_game();
     jogo_carregado = 0;
     capacidades = (CoreCapabilities){0};
@@ -230,6 +286,7 @@ void close_core(void) {
     if (core_dll) FreeLibrary(core_dll);
     core_dll = NULL;
     core_inicializado = false;
+    nome_core_atual[0]='\0';
     precisa_caminho_completo = false;
     api_get_system_info = NULL;
     core_paths_clear();
