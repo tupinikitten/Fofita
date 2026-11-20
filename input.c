@@ -4,11 +4,15 @@
 #include "libretro.h"
 #include "input_rules.h"
 #include "input_bindings.h"
+#include "input_latch.h"
 
 extern bool em_menu; 
 
-void retro_input_poll_cb(void) { 
-    SDL_PumpEvents(); 
+void retro_input_poll_cb(void) {
+    SDL_PumpEvents();
+    /* Congela pulsos da fila SDL para o quadro inteiro, garantindo que
+       um toque rapido nao seja perdido entre SDL_PollEvent e retro_run. */
+    input_latch_begin_frame();
 }
 
 int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id) {
@@ -32,6 +36,7 @@ int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, uns
     SDL_Scancode scancode=input_bindings_keyboard((InputBindAction)action);
     if(keyboard && scancode>SDL_SCANCODE_UNKNOWN && scancode<SDL_NUM_SCANCODES &&
        keyboard[scancode]) return 1;
+    if(input_latch_key(scancode)) return 1;
 
     SDL_GameController *pad=NULL;
     for(int j=0;j<SDL_NumJoysticks();++j) {
@@ -42,7 +47,9 @@ int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, uns
     }
     if(!pad) return 0;
     SDL_GameControllerButton button=input_bindings_gamepad((InputBindAction)action);
-    if(button!=SDL_CONTROLLER_BUTTON_INVALID && SDL_GameControllerGetButton(pad,button))
+    if(button!=SDL_CONTROLLER_BUTTON_INVALID &&
+       (SDL_GameControllerGetButton(pad,button) ||
+        input_latch_button(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad)),button)))
         return 1;
 
     /* Analógico esquerdo permanece um segundo direcional, independente

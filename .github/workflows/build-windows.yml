@@ -100,6 +100,13 @@ jobs:
             $(pkg-config --cflags --libs sdl2)
           ./input-bindings-test.exe
 
+      - name: Testar pulsos de entrada rapidos (menus Pokemon/Zelda)
+        run: |
+          set -euo pipefail
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o input-latch-test.exe \
+            input_latch.c tests/test_input_latch.c $(pkg-config --cflags sdl2)
+          ./input-latch-test.exe
+
       - name: Montar pacote Windows com bibliotecas
         run: |
           set -euo pipefail

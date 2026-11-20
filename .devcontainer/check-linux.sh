@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mapfile -t FLAGS < <(pkg-config --cflags sdl2 SDL2_image | tr ' ' '\n' | grep -v '^$')
 files=(
-  cartridge_style.c console_registry.c core_content.c core_paths.c save_manager.c image_processor.c input.c input_rules.c input_bindings.c
+  cartridge_style.c console_registry.c core_content.c core_paths.c save_manager.c image_processor.c input.c input_rules.c input_bindings.c input_latch.c
   mini_frontend.c game_session.c ui_carousel.c ui_cards.c ui_game_view.c ui_menu.c
   ui_text.c ui_theme.c video_audio.c
 )
@@ -39,4 +39,7 @@ gcc -std=gnu11 -Wall -Wextra -Werror "${FLAGS[@]}" -o "$test_dir/test_input_rule
 gcc -std=gnu11 -Wall -Wextra -Werror "${FLAGS[@]}" -o "$test_dir/test_input_bindings" \
   input_bindings.c tests/test_input_bindings.c $(pkg-config --libs sdl2)
 "$test_dir/test_input_bindings"
+gcc -std=gnu11 -Wall -Wextra -Werror "${FLAGS[@]}" -o "$test_dir/test_input_latch" \
+  input_latch.c tests/test_input_latch.c
+"$test_dir/test_input_latch"
 echo "Compilacao Windows deve ser validada no Actions."

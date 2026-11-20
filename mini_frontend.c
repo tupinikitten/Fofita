@@ -7,6 +7,7 @@
 #include "input.h"
 #include "input_rules.h"
 #include "input_bindings.h"
+#include "input_latch.h"
 #include "console_registry.h"
 #include "ui_carousel.h"
 #include "ui_menu.h"
@@ -72,6 +73,7 @@ static bool iniciar_jogo_atual(void) {
     descartar_textura_jogo();
     limpar_audio();
     configurar_video_jogo();
+    input_latch_reset();
     em_menu = false;
     return true;
 }
@@ -83,6 +85,7 @@ static void voltar_ao_menu(void) {
     descartar_textura_jogo();
     limpar_audio();
     configurar_video_menu();
+    input_latch_reset();
     em_menu = true;
     ui_menu_focar_carrossel();  /* o cartucho do jogo que acabou de rodar continua em foco */
 }
@@ -113,6 +116,7 @@ int main(int argc, char *argv[]) {
 
     while (rodando) {
         while (SDL_PollEvent(&event)) {
+            if(!em_menu) input_latch_event(&event);
             /* A captura de botao deve receber o evento BRUTO: nao traduzir
                gamepad em Enter/Esc enquanto Configuracoes espera uma entrada. */
             if(em_menu && ui_menu_capturar_remapeamento(&event)) continue;
