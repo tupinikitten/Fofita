@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include "../input_rules.h"
 
-int main(void) {
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     assert(!input_stick_direction(0,true));
     assert(!input_stick_direction(0,false));
     assert(!input_stick_direction(15999,true));
