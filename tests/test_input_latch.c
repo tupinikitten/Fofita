@@ -16,7 +16,8 @@
 
 int main(int argc, char **argv) {
     (void)argc; (void)argv;
-    SDL_Event e={0};
+    SDL_Event e;
+    memset(&e,0,sizeof(e)); /* Inicializar TODO o SDL_Event (uniao). */
     input_latch_reset();
 
     /* Toque rapido entre frames: DOWN e UP na mesma varredura de eventos.

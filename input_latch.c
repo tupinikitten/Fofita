@@ -1,8 +1,5 @@
 #include "input_latch.h"
 #include <string.h>
-#ifdef FOFITA_LATCH_TRACE
-#include <stdio.h>
-#endif
 
 /* Todas as funcoes devem ser chamadas na thread principal SDL. Os pulsos
    sao consumidos uma vez por retro_input_poll, nao por botao consultado. */
@@ -24,12 +21,6 @@ void input_latch_reset(void) {
 
 void input_latch_event(const SDL_Event *event) {
     if(!event) return;
-#ifdef FOFITA_LATCH_TRACE
-    fprintf(stderr,"LATCH event type=%lu keydown=%lu keyup=%lu repeat=%u scan=%d\\n",
-            (unsigned long)event->type,(unsigned long)SDL_KEYDOWN,
-            (unsigned long)SDL_KEYUP,(unsigned)event->key.repeat,
-            (int)event->key.keysym.scancode);
-#endif
     if(event->type==SDL_KEYDOWN && !event->key.repeat) {
         SDL_Scancode key=event->key.keysym.scancode;
         if(key>SDL_SCANCODE_UNKNOWN && key<SDL_NUM_SCANCODES)
@@ -55,13 +46,6 @@ void input_latch_event(const SDL_Event *event) {
 
 void input_latch_begin_frame(void) {
     memcpy(key_frame,key_pending,sizeof(key_frame));
-#ifdef FOFITA_LATCH_TRACE
-    fprintf(stderr,"LATCH frame DOWN=%u UP=%u X=%u RETURN=%u\\n",
-            (unsigned)key_frame[SDL_SCANCODE_DOWN],
-            (unsigned)key_frame[SDL_SCANCODE_UP],
-            (unsigned)key_frame[SDL_SCANCODE_X],
-            (unsigned)key_frame[SDL_SCANCODE_RETURN]);
-#endif
     memset(key_pending,0,sizeof(key_pending));
     memcpy(button_frame,button_pending,sizeof(button_frame));
     memcpy(button_frame_instance,button_pending_instance,sizeof(button_frame_instance));

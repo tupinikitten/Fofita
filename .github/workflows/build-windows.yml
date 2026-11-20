@@ -103,7 +103,7 @@ jobs:
       - name: Testar pulsos de entrada rapidos (menus Pokemon/Zelda)
         run: |
           set -euo pipefail
-          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -DFOFITA_LATCH_TRACE -o input-latch-test.exe \
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -o input-latch-test.exe \
             input_latch.c tests/test_input_latch.c $(pkg-config --cflags --libs sdl2)
           timeout 20s ./input-latch-test.exe
 
