@@ -60,6 +60,11 @@ static char ocultos[MAX_OCULTOS][TAM_ID];
 static int total_ocultos = 0;
 
 static SDL_Texture *wallpaper = NULL;
+/* Apenas um mapa pequeno de brilho: nao manter a imagem completa na RAM. */
+#define MAPA_BRILHO_W 96
+#define MAPA_BRILHO_H 54
+static Uint8 mapa_brilho[MAPA_BRILHO_W * MAPA_BRILHO_H];
+static int mapa_brilho_valido = 0;
 static SDL_Texture *seta_esq = NULL;
 static SDL_Texture *seta_dir = NULL;
 static SDL_Texture *icones_laterais[TOTAL_ACOES_LATERAIS] = {0};
@@ -393,6 +398,39 @@ static SDL_Color cor_sombra_ui(void) {
     return preset_ativo()!=PRESET_LIGHT ? (SDL_Color){255,255,255,170}
                                        : (SDL_Color){0,0,0,120};
 }
+/* O contraste de cada legenda usa a regiao em que ela aparece,
+   independentemente do preset da sidebar, que observa o lado esquerdo. */
+static SDL_Color cor_legenda_local(SDL_Rect regiao, int suave, SDL_Color *sombra) {
+    int vw = 0, vh = 0;
+    obter_tamanho_ui(&vw, &vh);
+    if (!mapa_brilho_valido || vw <= 0 || vh <= 0) {
+        if (sombra) *sombra = cor_sombra_ui();
+        return suave ? cor_texto_suave_ui() : cor_texto_ui();
+    }
+
+    int soma = 0;
+    for (int j = 0; j < 3; ++j) {
+        for (int i = 0; i < 11; ++i) {
+            int x = regiao.x + regiao.w * (2 * i + 1) / 22;
+            int y = regiao.y + regiao.h * (2 * j + 1) / 6;
+            if (x < 0) x = 0;
+            if (x >= vw) x = vw - 1;
+            if (y < 0) y = 0;
+            if (y >= vh) y = vh - 1;
+            soma += mapa_brilho[(y * MAPA_BRILHO_H / vh) * MAPA_BRILHO_W
+                              + (x * MAPA_BRILHO_W / vw)];
+        }
+    }
+    const int fundo_escuro = soma < 33 * 150;
+    if (sombra)
+        *sombra = fundo_escuro ? (SDL_Color){9,14,24,205}
+                              : (SDL_Color){255,255,255,200};
+    if (fundo_escuro)
+        return suave ? (SDL_Color){213,223,240,255}
+                     : (SDL_Color){248,249,255,255};
+    return suave ? (SDL_Color){58,72,94,255}
+                 : (SDL_Color){25,35,56,255};
+}
 static int extensao_imagem(const char *nome) {
     const char *p=strrchr(nome,'.');
     return p && (!SDL_strcasecmp(p,".jpg") || !SDL_strcasecmp(p,".jpeg") || !SDL_strcasecmp(p,".png"));
@@ -413,6 +451,7 @@ static void listar_wallpapers(void) {
         if(strcmp(wallpaper_path,wallpapers[i])==0) wallpaper_indice=i;
 }
 static void avaliar_contraste_wallpaper(void) {
+    mapa_brilho_valido = 0;
     SDL_Surface *s=IMG_Load(wallpaper_path);
     if(!s) { auto_preset=PRESET_DARK; return; }
     SDL_Surface *rgba=SDL_ConvertSurfaceFormat(s,SDL_PIXELFORMAT_RGBA32,0);
@@ -429,6 +468,35 @@ static void avaliar_contraste_wallpaper(void) {
             SDL_GetRGBA(px,rgba->format,&r,&g,&b,&a);
             soma+=0.2126*r+0.7152*g+0.0722*b;
             ++n;
+        }
+        /* Replica o recorte central de desenhar_fundo() em 1280x720;
+           esta amostragem so acontece quando o wallpaper e trocado. */
+        int vw = 0, vh = 0;
+        obter_tamanho_ui(&vw, &vh);
+        if (vw > 0 && vh > 0 && w > 0 && h > 0) {
+            float escala = fmaxf((float)vw / w, (float)vh / h);
+            int origem_w = (int)(vw / escala + 0.5f);
+            int origem_h = (int)(vh / escala + 0.5f);
+            if (origem_w > w) origem_w = w;
+            if (origem_h > h) origem_h = h;
+            int origem_x = (w - origem_w) / 2;
+            int origem_y = (h - origem_h) / 2;
+            for (int my = 0; my < MAPA_BRILHO_H; ++my) {
+                int sy = origem_y + origem_h * (2 * my + 1) / (2 * MAPA_BRILHO_H);
+                if (sy >= h) sy = h - 1;
+                for (int mx = 0; mx < MAPA_BRILHO_W; ++mx) {
+                    int sx = origem_x + origem_w * (2 * mx + 1) / (2 * MAPA_BRILHO_W);
+                    if (sx >= w) sx = w - 1;
+                    Uint32 pixel;
+                    memcpy(&pixel, (Uint8 *)rgba->pixels + sy * rgba->pitch + sx * 4, 4);
+                    Uint8 r,g,b,a;
+                    SDL_GetRGBA(pixel, rgba->format, &r, &g, &b, &a);
+                    int brilho = (2126 * r + 7152 * g + 722 * b) / 10000;
+                    /* Areas transparentes sao exibidas sobre o fundo escuro. */
+                    mapa_brilho[my * MAPA_BRILHO_W + mx] = (Uint8)(brilho * a / 255);
+                }
+            }
+            mapa_brilho_valido = 1;
         }
         SDL_UnlockSurface(rgba);
     }
@@ -1019,9 +1087,15 @@ static void desenhar_cabecalho(int x_area, int largura_area) {
         snprintf(rotulo, sizeof(rotulo), "%s", item->cfg->id);
         for (char *c = rotulo; *c; ++c)
             if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
-        ui_texto_desenhar_centro(rotulo, slot.x + slot.w / 2, y0 + SLOT_H + 4, 2,
-                                 selecionado ? cor_texto_ui() : cor_texto_suave_ui(),
-                                 selecionado ? cor_sombra_ui() : (SDL_Color){ 0, 0, 0, 0 });
+        int rotulo_y = y0 + SLOT_H + 4;
+        int rotulo_largura = ui_texto_largura(rotulo, 2);
+        SDL_Rect faixa_rotulo = {slot.x + (slot.w - rotulo_largura) / 2,
+                                 rotulo_y, rotulo_largura, ui_texto_altura(2)};
+        SDL_Color sombra_rotulo;
+        SDL_Color tinta_rotulo = cor_legenda_local(faixa_rotulo, !selecionado,
+                                                  &sombra_rotulo);
+        ui_texto_desenhar_centro(rotulo, slot.x + slot.w / 2, rotulo_y, 2,
+                                 tinta_rotulo, sombra_rotulo);
     }
 }
 
@@ -1034,7 +1108,13 @@ static void desenhar_linha_titulo(int x_area, int vw, int y) {
 
     int max_texto = vw - 2 * (SETA_TAM + 36);
     ui_texto_ajustar(bruto, max_texto, 2, nome, sizeof(nome));
-    ui_texto_desenhar_centro(nome, x_area + vw / 2, y - 15, 2, cor_texto_ui(), cor_sombra_ui());
+    int titulo_largura = ui_texto_largura(nome, 2);
+    SDL_Rect faixa_titulo = { x_area + (vw - titulo_largura) / 2, y - 15,
+                              titulo_largura, ui_texto_altura(2) };
+    SDL_Color sombra_titulo;
+    SDL_Color tinta_titulo = cor_legenda_local(faixa_titulo, 0, &sombra_titulo);
+    ui_texto_desenhar_centro(nome, x_area + vw / 2, y - 15, 2,
+                             tinta_titulo, sombra_titulo);
 
     if (carousel_total_visiveis() > 1) {
         int meio = ui_texto_largura(nome, 2) / 2;
