@@ -94,7 +94,6 @@ static int tela_previa_wallpaper = 0;
 static int preview_indice = 0;
 static SDL_Texture *preview_textura = NULL;
 static char preview_custom_path[1024] = "";
-static Uint32 animacao_slot_inicio = 0;
 
 static int item_lateral = LATERAL_CONFIGURACOES;
 static int tela_configuracoes = 0;
@@ -849,7 +848,6 @@ void ui_menu_rolagem(int direcao) {
     else mover_carousel_direita();
 }
 
-void ui_menu_animar_slot(void) { animacao_slot_inicio=SDL_GetTicks(); }
 
 /* Arrastar uma imagem para a janela abre a previa, sem modificar preferencias ate confirmar. */
 void ui_menu_wallpaper_solto(const char *caminho) {
@@ -997,14 +995,6 @@ static void desenhar_slot(int cx,int y) {
     desenhar_capsula(abertura,(SDL_Color){8,14,28,195},(SDL_Color){220,231,244,78});
     SDL_Rect brilho={cx-48,y+18,96,3};
     preencher(brilho,(SDL_Color){borda.r,borda.g,borda.b,145});
-    Uint32 dt=SDL_GetTicks()-animacao_slot_inicio;
-    if(animacao_slot_inicio && dt<380) {
-        /* Cartucho esquematico descendo em direcao ao slot antes de abrir a ROM. */
-        int desloc=(int)(dt*24/380);
-        SDL_Rect cartucho={cx-23,y-26+desloc,46,26};
-        arredondado(cartucho,5,(SDL_Color){borda.r,borda.g,borda.b,235},0);
-        arredondado(cartucho,5,(SDL_Color){255,255,255,215},1);
-    }
 }
 /* Mantido por compatibilidade com o frontend; o rodape visual foi removido. */
 void ui_menu_controle_conectado(int sim) { (void)sim; }
