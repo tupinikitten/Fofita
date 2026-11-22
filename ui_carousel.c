@@ -341,9 +341,10 @@ void desenhar_carousel(SDL_Rect area) {
     if (cart_box > 340) cart_box = 340;
     if (cart_box < 64) cart_box = 64;
 
-    /* Laterais menores e mais proximas, sem competir com o cartucho em foco. */
+    /* Laterais menores, com respiro visual ao redor do cartucho em foco.
+       Mantem o centro e o tamanho das artes; muda somente a distancia lateral. */
     const int side_box = cart_box * 76 / 100;
-    const int side_offset = cart_box * 82 / 100;
+    const int side_offset = cart_box * 108 / 100;
 
     const int center_x = area.x + area.w / 2;
     const int center_y = area.y + (int)(area.h * 0.47f);
