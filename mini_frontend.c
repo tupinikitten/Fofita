@@ -104,7 +104,6 @@ int main(int argc, char *argv[]) {
     }
 
     bool rodando = true;
-    Uint32 iniciar_apos = 0;
     SDL_Event event;
     SDL_GameController *controle = NULL;
     Uint32 repeticao_analogica = 0;
@@ -155,10 +154,8 @@ int main(int argc, char *argv[]) {
                     float lx=0.0f,ly=0.0f;
                     SDL_RenderWindowToLogical(renderer,event.button.x,event.button.y,&lx,&ly);
                     MenuAcao a=ui_menu_clique((int)lx,(int)ly);
-                    if(a==MENU_ACAO_INICIAR_JOGO) {
-                        ui_menu_animar_slot();
-                        iniciar_apos=SDL_GetTicks()+380;
-                    }
+                    if(a==MENU_ACAO_INICIAR_JOGO)
+                        iniciar_jogo_atual();
                 }
                 continue;
             }
@@ -196,19 +193,12 @@ int main(int argc, char *argv[]) {
             if (em_menu) {
                 MenuAcao acao = ui_menu_tecla(tecla, mod);
 
-                if (acao == MENU_ACAO_INICIAR_JOGO) {
-                    ui_menu_animar_slot();
-                    iniciar_apos=SDL_GetTicks()+380;
-                }
+                if (acao == MENU_ACAO_INICIAR_JOGO)
+                    iniciar_jogo_atual();
                 else if (acao == MENU_ACAO_SAIR) rodando = false;
             } else if (tecla == SDLK_SPACE || tecla == SDLK_ESCAPE) {
                 voltar_ao_menu();
             }
-        }
-
-        if (em_menu && iniciar_apos && SDL_GetTicks()>=iniciar_apos) {
-            iniciar_apos=0;
-            iniciar_jogo_atual();
         }
 
         /* O fundo preto tambem preenche as barras do video em letterbox. */
