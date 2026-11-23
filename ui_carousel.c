@@ -364,9 +364,11 @@ void desenhar_carousel(SDL_Rect area) {
                        center_y - side_box / 2, side_box, side_box}, 100);
     }
 
-    /* Cartuchos estaticos ate a futura versao da animacao de encaixe. */
+    /* Flutuacao sutil exclusiva do cartucho em destaque. */
+    float tempo = SDL_GetTicks() / 300.0f;
+    int flutuacao_y = (int)(sin(tempo) * 5.0f);
     desenhar_jogo(indices[foco_atual],
-        (SDL_Rect){main_x, main_y, cart_box, cart_box}, 255);
+        (SDL_Rect){main_x, main_y + flutuacao_y, cart_box, cart_box}, 255);
 }
 
 void mover_carousel_esquerda(void) {
