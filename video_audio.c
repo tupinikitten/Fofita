@@ -5,6 +5,58 @@ SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *textura_jogo = NULL;
 SDL_AudioDeviceID dispositivo_audio;
+static SDL_AudioDeviceID dispositivo_ui = 0;
+static Uint8 *sons_ui[2] = {NULL,NULL};
+static Uint32 tamanhos_ui[2] = {0,0};
+
+static void carregar_sons_ui(void) {
+    const char *arquivos[2] = {
+        "ui/sounds/ui-menu-seletion.wav",
+        "ui/sounds/switch-button-sound.wav"
+    };
+    SDL_AudioSpec formato = {0};
+    formato.freq = 44100;
+    formato.format = AUDIO_S16SYS;
+    formato.channels = 2;
+    formato.samples = 1024;
+    dispositivo_ui = SDL_OpenAudioDevice(NULL, 0, &formato, NULL, 0);
+    if (!dispositivo_ui) return;
+    SDL_PauseAudioDevice(dispositivo_ui, 0);
+    for (int i=0;i<2;++i) {
+        SDL_AudioSpec origem;
+        Uint8 *dados = NULL;
+        Uint32 tamanho = 0;
+        if (!SDL_LoadWAV(arquivos[i], &origem, &dados, &tamanho)) {
+            SDL_Log("Som UI indisponivel: %s", arquivos[i]);
+            continue;
+        }
+        SDL_AudioCVT conversor;
+        if (SDL_BuildAudioCVT(&conversor, origem.format, origem.channels,
+                             origem.freq, formato.format, formato.channels,
+                             formato.freq) < 0) {
+            SDL_FreeWAV(dados);
+            continue;
+        }
+        conversor.len = (int)tamanho;
+        conversor.buf = (Uint8 *)SDL_malloc(tamanho * conversor.len_mult);
+        if (conversor.buf) {
+            SDL_memcpy(conversor.buf,dados,tamanho);
+            if (SDL_ConvertAudio(&conversor)==0) {
+                sons_ui[i]=conversor.buf;
+                tamanhos_ui[i]=(Uint32)conversor.len_cvt;
+            } else SDL_free(conversor.buf);
+        }
+        SDL_FreeWAV(dados);
+    }
+}
+void ui_som_tocar(UiSom som) {
+    if (!dispositivo_ui || som<UI_SOM_NAVEGACAO || som>UI_SOM_TROCA ||
+        !sons_ui[som] || !tamanhos_ui[som]) return;
+    /* Substitui efeito anterior para evitar pilha de sons ao navegar rapido. */
+    SDL_ClearQueuedAudio(dispositivo_ui);
+    SDL_QueueAudio(dispositivo_ui,sons_ui[som],tamanhos_ui[som]);
+}
+
 
 int formato_de_cor = SDL_PIXELFORMAT_RGB555;
 float proporcao_video = 0.0f;
@@ -54,6 +106,7 @@ bool init_video_audio(void) {
 
     dispositivo_audio = SDL_OpenAudioDevice(NULL, 0, &esp_audio, NULL, 0);
     SDL_PauseAudioDevice(dispositivo_audio, 0);
+    carregar_sons_ui();
 
     window = SDL_CreateWindow("Fofita", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                   1280, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
@@ -65,6 +118,19 @@ bool init_video_audio(void) {
 }
 
 void fechar_video_audio(void) {
+    if (dispositivo_ui) {
+        SDL_CloseAudioDevice(dispositivo_ui);
+        dispositivo_ui=0;
+    }
+    for(int i=0;i<2;++i) {
+        SDL_free(sons_ui[i]);
+        sons_ui[i]=NULL;
+        tamanhos_ui[i]=0;
+    }
+    if (dispositivo_audio) {
+        SDL_CloseAudioDevice(dispositivo_audio);
+        dispositivo_audio=0;
+    }
     if (textura_jogo) {
         SDL_DestroyTexture(textura_jogo);
     }
