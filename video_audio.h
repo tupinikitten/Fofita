@@ -31,6 +31,10 @@ void fechar_video_audio(void);
 void descartar_textura_jogo(void);
 void limpar_audio(void);
 
+/* Efeitos de interface em dispositivo independente do audio Libretro. */
+typedef enum { UI_SOM_NAVEGACAO, UI_SOM_TROCA } UiSom;
+void ui_som_tocar(UiSom som);
+
 void retro_video_refresh_cb(const void *data, unsigned width, unsigned height, size_t pitch);
 void retro_audio_sample_cb(int16_t left, int16_t right);
 size_t retro_audio_sample_batch_cb(const int16_t *data, size_t frames);
