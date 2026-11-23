@@ -976,8 +976,10 @@ static void desenhar_capsula(SDL_Rect r,SDL_Color fundo,SDL_Color borda) {
     arredondado(r,r.h/2,fundo,0);
     arredondado(r,r.h/2,borda,1);
 }
+/* Hora e bateria diretamente sobre o wallpaper, sem fundo de pilula. */
 static void desenhar_relogio(int vw) {
-    time_t agora=time(NULL); struct tm *tm=localtime(&agora);
+    time_t agora=time(NULL);
+    struct tm *tm=localtime(&agora);
     if(!tm) return;
     char horario[32]; strftime(horario,sizeof(horario),"%H:%M",tm);
     int pct=-1;
@@ -986,19 +988,35 @@ static void desenhar_relogio(int vw) {
     if(GetSystemPowerStatus(&energia) && energia.BatteryLifePercent!=255)
         pct=(int)energia.BatteryLifePercent;
 #endif
-    SDL_Rect area={vw-(pct>=0?192:128),14,pct>=0?176:112,39};
-    int claro=preset_ativo()!=PRESET_LIGHT;
-    SDL_Color tinta=claro?(SDL_Color){30,43,71,255}:(SDL_Color){246,247,255,255};
-    desenhar_capsula(area,claro?(SDL_Color){232,245,255,193}:(SDL_Color){22,34,75,191},
-                     claro?(SDL_Color){255,255,255,200}:(SDL_Color){192,213,251,98});
-    ui_texto_desenhar(horario,area.x+17,area.y+9,1,tinta,(SDL_Color){0,0,0,0});
+    int inicio=vw-(pct>=0?218:105), y=21;
+    SDL_Rect faixa={inicio,y-2,pct>=0?207:100,34};
+    SDL_Color sombra, tinta=cor_legenda_local(faixa,0,&sombra);
+    int cx=inicio+10, cy=y+13, raio=8;
+    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer,tinta.r,tinta.g,tinta.b,255);
+    for(int i=0;i<24;++i) {
+        float t1=(float)i*6.2831853f/24.0f;
+        float t2=(float)(i+1)*6.2831853f/24.0f;
+        SDL_RenderDrawLine(renderer,cx+(int)lroundf(cosf(t1)*raio),
+            cy+(int)lroundf(sinf(t1)*raio),
+            cx+(int)lroundf(cosf(t2)*raio),
+            cy+(int)lroundf(sinf(t2)*raio));
+    }
+    SDL_RenderDrawLine(renderer,cx,cy,cx,cy-5);
+    SDL_RenderDrawLine(renderer,cx,cy,cx+4,cy+2);
+    ui_texto_desenhar(horario,inicio+25,y-4,1,tinta,sombra);
     if(pct>=0) {
-        SDL_Rect corpo={area.x+90,area.y+13,26,13};
-        arredondado(corpo,3,(SDL_Color){tinta.r,tinta.g,tinta.b,230},1);
-        preencher((SDL_Rect){corpo.x+26,corpo.y+4,2,5},(SDL_Color){tinta.r,tinta.g,tinta.b,215});
-        preencher((SDL_Rect){corpo.x+2,corpo.y+2,22*pct/100,9},(SDL_Color){110,210,160,240});
+        int bx=inicio+106;
+        SDL_Rect corpo={bx,y+6,25,13};
+        SDL_RenderDrawRect(renderer,&corpo);
+        SDL_RenderDrawLine(renderer,bx+26,y+10,bx+26,y+15);
+        SDL_Color carga=pct<20?(SDL_Color){244,107,101,255}
+                              :(SDL_Color){91,211,158,255};
+        SDL_SetRenderDrawColor(renderer,carga.r,carga.g,carga.b,255);
+        SDL_Rect cheio={bx+2,y+8,(21*pct)/100,9};
+        if(cheio.w>0) SDL_RenderFillRect(renderer,&cheio);
         char valor[16]; snprintf(valor,sizeof(valor),"%d%%",pct);
-        ui_texto_desenhar(valor,area.x+126,area.y+9,1,tinta,(SDL_Color){0,0,0,0});
+        ui_texto_desenhar(valor,bx+35,y-4,1,tinta,sombra);
     }
 }
 
