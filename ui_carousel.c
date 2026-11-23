@@ -330,6 +330,46 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
 void desenhar_carousel(SDL_Rect area) {
     if (total_visiveis == 0 || area.w <= 0 || area.h <= 0) return;
 
+    if (ui_game_view_get()==GAME_VIEW_CARD) {
+        /* Ate cinco capas quadradas no centro, com foco emoldurado.
+           Cada indice aparece uma unica vez mesmo em bibliotecas pequenas. */
+        int lado=(int)(area.h*0.46f);
+        int largura_limite=(area.w-50)*100/486;
+        if(lado>largura_limite) lado=largura_limite;
+        if(lado>230) lado=230;
+        if(lado<64) lado=64;
+        int vizinho=lado*87/100;
+        int externo=lado*82/100;
+        int espaco=lado*11/100;
+        if(espaco<8) espaco=8;
+        int dist1=(lado+vizinho)/2+espaco;
+        int dist2=dist1+(vizinho+externo)/2+espaco;
+        int cx=area.x+area.w/2, cy=area.y+(int)(area.h*0.47f);
+        if(total_visiveis>=5) {
+            size_t ee=(foco_atual+total_visiveis-2)%total_visiveis;
+            size_t dd=(foco_atual+2)%total_visiveis;
+            desenhar_jogo(indices[ee],(SDL_Rect){cx-dist2-externo/2,
+                           cy-externo/2,externo,externo},218);
+            desenhar_jogo(indices[dd],(SDL_Rect){cx+dist2-externo/2,
+                           cy-externo/2,externo,externo},218);
+        }
+        if(total_visiveis>=3) {
+            size_t e=(foco_atual+total_visiveis-1)%total_visiveis;
+            size_t d=(foco_atual+1)%total_visiveis;
+            desenhar_jogo(indices[e],(SDL_Rect){cx-dist1-vizinho/2,
+                           cy-vizinho/2,vizinho,vizinho},235);
+            desenhar_jogo(indices[d],(SDL_Rect){cx+dist1-vizinho/2,
+                           cy-vizinho/2,vizinho,vizinho},235);
+        } else if(total_visiveis==2) {
+            size_t outro=(foco_atual+1)%total_visiveis;
+            desenhar_jogo(indices[outro],(SDL_Rect){cx+dist1-vizinho/2,
+                           cy-vizinho/2,vizinho,vizinho},235);
+        }
+        desenhar_jogo(indices[foco_atual],(SDL_Rect){cx-lado/2,
+                       cy-lado/2,lado,lado},255);
+        return;
+    }
+
     /*
      * O tamanho deixa de acompanhar toda a altura disponivel. O layout de
      * referencia usa cartuchos compactos; limitamos a caixa por altura e
