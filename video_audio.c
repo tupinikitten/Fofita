@@ -8,6 +8,7 @@ SDL_AudioDeviceID dispositivo_audio;
 static SDL_AudioDeviceID dispositivo_ui = 0;
 static Uint8 *sons_ui[2] = {NULL,NULL};
 static Uint32 tamanhos_ui[2] = {0,0};
+static Uint32 ultimo_som_navegacao = 0;
 
 static void carregar_sons_ui(void) {
     const char *arquivos[2] = {
@@ -44,6 +45,21 @@ static void carregar_sons_ui(void) {
             if (SDL_ConvertAudio(&conversor)==0) {
                 sons_ui[i]=conversor.buf;
                 tamanhos_ui[i]=(Uint32)conversor.len_cvt;
+                if(i==UI_SOM_NAVEGACAO) {
+                    /* Cliques curtos e sem estalos: a tecla pode repetir
+                       continuamente sem cortar o sample anterior. */
+                    Uint32 maximo=44100*4*110/1000;
+                    if(tamanhos_ui[i]>maximo) tamanhos_ui[i]=maximo;
+                    Uint32 quadros=tamanhos_ui[i]/4;
+                    Uint32 fade=quadros<441?quadros:441;
+                    Sint16 *pcm=(Sint16 *)sons_ui[i];
+                    for(Uint32 j=0;j<fade;++j) {
+                        float ganho=(float)(fade-j)/(float)fade;
+                        Uint32 k=(quadros-fade+j)*2;
+                        pcm[k]=(Sint16)(pcm[k]*ganho);
+                        pcm[k+1]=(Sint16)(pcm[k+1]*ganho);
+                    }
+                }
             } else SDL_free(conversor.buf);
         }
         SDL_FreeWAV(dados);
@@ -52,8 +68,16 @@ static void carregar_sons_ui(void) {
 void ui_som_tocar(UiSom som) {
     if (!dispositivo_ui || som<UI_SOM_NAVEGACAO || som>UI_SOM_TROCA ||
         !sons_ui[som] || !tamanhos_ui[som]) return;
-    /* Substitui efeito anterior para evitar pilha de sons ao navegar rapido. */
-    SDL_ClearQueuedAudio(dispositivo_ui);
+    if(som==UI_SOM_NAVEGACAO) {
+        Uint32 agora=SDL_GetTicks();
+        if(ultimo_som_navegacao && agora-ultimo_som_navegacao<88) return;
+        /* Nao reiniciar o clique a cada tecla repetida: deixa soar ate
+           o final; limita a fila para nao atrasar o som da selecao. */
+        if(SDL_GetQueuedAudioSize(dispositivo_ui)>44100*4*55/1000) return;
+        ultimo_som_navegacao=agora;
+    } else {
+        SDL_ClearQueuedAudio(dispositivo_ui);
+    }
     SDL_QueueAudio(dispositivo_ui,sons_ui[som],tamanhos_ui[som]);
 }
 
@@ -75,6 +99,7 @@ void configurar_video_menu(void) {
 }
 
 void configurar_video_jogo(void) {
+    if(dispositivo_ui) SDL_ClearQueuedAudio(dispositivo_ui);
     if (!renderer) return;
     modo_menu_ativo=0;
     SDL_RenderSetLogicalSize(renderer,0,0);
