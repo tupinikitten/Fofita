@@ -3,6 +3,7 @@
 #include "ui_theme.h"
 #include "ui_carousel.h"
 #include "ui_game_view.h"
+#include "ui_cards.h"
 #include "video_audio.h"
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
@@ -615,6 +616,29 @@ static int tecla_confirmar(SDL_Keycode t) {
 }
 
 MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
+    /* Edicao por ROM: bloquear troca de jogo/console ate salvar ou cancelar. */
+    if (ui_cards_editando()) {
+        if (tecla==SDLK_ESCAPE) {
+            ui_cards_edicao_cancelar();
+        } else if (tecla_confirmar(tecla)) {
+            if (ui_cards_edicao_salvar()) {
+                ui_som_tocar(UI_SOM_TROCA);
+                ui_menu_aviso("Enquadramento salvo para este jogo");
+            } else ui_menu_aviso("Nao foi possivel salvar fofita_cards.cfg");
+        } else if (tecla==SDLK_LEFT) ui_cards_edicao_mover(-8,0);
+        else if (tecla==SDLK_RIGHT) ui_cards_edicao_mover(8,0);
+        else if (tecla==SDLK_UP) ui_cards_edicao_mover(0,-8);
+        else if (tecla==SDLK_DOWN) ui_cards_edicao_mover(0,8);
+        else if (tecla==SDLK_PLUS || tecla==SDLK_EQUALS ||
+                 tecla==SDLK_KP_PLUS) ui_cards_edicao_zoom(5);
+        else if (tecla==SDLK_MINUS || tecla==SDLK_KP_MINUS)
+            ui_cards_edicao_zoom(-5);
+        else if (tecla==SDLK_f) {
+            ui_cards_edicao_alternar_modo();
+            ui_som_tocar(UI_SOM_TROCA);
+        } else if (tecla==SDLK_r) ui_cards_edicao_restaurar();
+        return MENU_ACAO_NENHUMA;
+    }
     if (tela_previa_wallpaper) {
         if(tecla==SDLK_ESCAPE) { tela_previa_wallpaper=0; preview_custom_path[0]='\0'; }
         else if((tecla==SDLK_LEFT || tecla==SDLK_RIGHT) && !preview_custom_path[0]) {
@@ -691,6 +715,14 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
             case 1: tela_configuracoes=0; break;
             }
         }
+        return MENU_ACAO_NENHUMA;
+    }
+
+    /* E abre o editor somente no modo digital, nunca nos cartuchos. */
+    if (tecla==SDLK_e && foco==FOCO_CARROSSEL &&
+        ui_game_view_get()==GAME_VIEW_CARD && carousel_total_visiveis()>0) {
+        if (ui_cards_iniciar_edicao(obter_caminho_jogo_atual()))
+            ui_som_tocar(UI_SOM_TROCA);
         return MENU_ACAO_NENHUMA;
     }
 
@@ -804,7 +836,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
     int vw=0,vh=0;
     obter_tamanho_ui(&vw,&vh);
     if(vw<=0 || vh<=0) return MENU_ACAO_NENHUMA;
-    if(tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
+    if(ui_cards_editando() || tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
     if(tela_aparencia || tela_configuracoes) {
         int custom=tela_aparencia;
         int n=custom?TOTAL_OPCOES_APARENCIA:2;
@@ -858,7 +890,8 @@ MenuAcao ui_menu_clique(int mx,int my) {
     return MENU_ACAO_NENHUMA;
 }
 void ui_menu_rolagem(int direcao) {
-    if(tela_previa_wallpaper || tela_aparencia || tela_configuracoes || !direcao) return;
+    if(ui_cards_editando() || tela_previa_wallpaper ||
+       tela_aparencia || tela_configuracoes || !direcao) return;
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
@@ -1383,6 +1416,26 @@ void ui_menu_desenhar(void) {
         contorno(faixa, 1, tema->aviso);
         ui_texto_desenhar_centro(aviso, x_area + largura_area / 2, faixa.y + 6, 2,
                                  tema->aviso, (SDL_Color){ 0, 0, 0, 0 });
+    }
+
+    if (ui_cards_editando()) {
+        UiCardAjuste ajuste=ui_cards_edicao_atual();
+        SDL_Rect painel={x_area+65,vh-90,largura_area-130,79};
+        arredondado(painel,16,(SDL_Color){15,22,41,220},0);
+        arredondado(painel,16,(SDL_Color){229,240,255,130},1);
+        const SDL_Color branco={244,248,255,255};
+        const SDL_Color sem_sombra={0,0,0,0};
+        char descricao[180];
+        snprintf(descricao,sizeof(descricao),
+                 "MODO: %s    ZOOM: %d%%    X: %d    Y: %d",
+                 ajuste.encaixar?"ENCAIXAR":"PREENCHER",
+                 ajuste.zoom_pct,ajuste.desloc_x,ajuste.desloc_y);
+        ui_texto_desenhar_centro("AJUSTAR CAPA  |  SETAS: MOVER  +/-: ZOOM  F: MODO  R: RESET",
+             x_area+largura_area/2,painel.y+9,1,branco,sem_sombra);
+        ui_texto_desenhar_centro(descricao,
+             x_area+largura_area/2,painel.y+30,1,branco,sem_sombra);
+        ui_texto_desenhar_centro("ENTER: SALVAR     ESC: CANCELAR     (ZOOM EM PREENCHER)",
+             x_area+largura_area/2,painel.y+51,1,branco,sem_sombra);
     }
 
     if(tela_previa_wallpaper) {
