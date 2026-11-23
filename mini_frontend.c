@@ -191,6 +191,11 @@ int main(int argc, char *argv[]) {
                 case SDL_CONTROLLER_BUTTON_DPAD_DOWN: tecla=SDLK_DOWN; break;
                 case SDL_CONTROLLER_BUTTON_A: tecla=SDLK_RETURN; break;
                 case SDL_CONTROLLER_BUTTON_B: tecla=SDLK_ESCAPE; break;
+                case SDL_CONTROLLER_BUTTON_Y: tecla=SDLK_e; break; /* editar capa */
+                case SDL_CONTROLLER_BUTTON_X: tecla=SDLK_f; break; /* enquadramento */
+                case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: tecla=SDLK_MINUS; break;
+                case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: tecla=SDLK_EQUALS; break;
+                case SDL_CONTROLLER_BUTTON_BACK: tecla=SDLK_r; break;
                 case SDL_CONTROLLER_BUTTON_START: tecla=SDLK_TAB; break;
                 default: break;
                 }
