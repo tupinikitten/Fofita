@@ -107,6 +107,10 @@ int main(int argc, char *argv[]) {
     SDL_Event event;
     SDL_GameController *controle = NULL;
     Uint32 repeticao_analogica = 0;
+    /* SDL envia BUTTONDOWN uma unica vez para o D-pad. Repetimos enquanto
+       a direcao estiver pressionada, como uma tecla segurada no PC. */
+    int direcao_dpad = 0;
+    Uint32 repetir_dpad_em = 0;
     if(SDL_NumJoysticks()>0 && SDL_IsGameController(0))
         controle=SDL_GameControllerOpen(0);
     ui_menu_controle_conectado(controle!=NULL);
@@ -141,6 +145,14 @@ int main(int argc, char *argv[]) {
                     controle=NULL;
                 }
                 ui_menu_controle_conectado(controle!=NULL);
+                direcao_dpad=0;
+                continue;
+            }
+            if(event.type==SDL_CONTROLLERBUTTONUP) {
+                if((event.cbutton.button==SDL_CONTROLLER_BUTTON_DPAD_LEFT &&
+                    direcao_dpad==-1) ||
+                   (event.cbutton.button==SDL_CONTROLLER_BUTTON_DPAD_RIGHT &&
+                    direcao_dpad==1)) direcao_dpad=0;
                 continue;
             }
             if(event.type==SDL_MOUSEWHEEL) {
@@ -167,6 +179,11 @@ int main(int argc, char *argv[]) {
                 mod=event.key.keysym.mod;
                 repetir=event.key.repeat;
             } else if(event.type==SDL_CONTROLLERBUTTONDOWN) {
+                if(event.cbutton.button==SDL_CONTROLLER_BUTTON_DPAD_LEFT ||
+                   event.cbutton.button==SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
+                    direcao_dpad=event.cbutton.button==SDL_CONTROLLER_BUTTON_DPAD_LEFT?-1:1;
+                    repetir_dpad_em=SDL_GetTicks()+270;
+                }
                 switch(event.cbutton.button) {
                 case SDL_CONTROLLER_BUTTON_DPAD_LEFT: tecla=SDLK_LEFT; break;
                 case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: tecla=SDLK_RIGHT; break;
@@ -199,6 +216,16 @@ int main(int argc, char *argv[]) {
             } else if (tecla == SDLK_SPACE || tecla == SDLK_ESCAPE) {
                 voltar_ao_menu();
             }
+        }
+
+        if (em_menu && controle && direcao_dpad &&
+            SDL_GetTicks()>=repetir_dpad_em) {
+            SDL_GameControllerButton botao=direcao_dpad<0
+                ? SDL_CONTROLLER_BUTTON_DPAD_LEFT : SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+            if (SDL_GameControllerGetButton(controle,botao)) {
+                ui_menu_tecla(direcao_dpad<0?SDLK_LEFT:SDLK_RIGHT,0);
+                repetir_dpad_em=SDL_GetTicks()+120;
+            } else direcao_dpad=0;
         }
 
         /* O fundo preto tambem preenche as barras do video em letterbox. */
