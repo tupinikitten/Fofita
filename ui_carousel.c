@@ -146,6 +146,7 @@ static void escanear_pasta_console(const ConsoleConfig *console, const char *pas
 }
 
 void init_carousel(void) {
+    ui_cards_carregar_ajustes();
     const ConsoleConfig *configs = console_registry_get_all(&total_consoles);
 
     runtime_consoles = (ConsoleRuntime *)calloc(total_consoles, sizeof(ConsoleRuntime));
@@ -255,6 +256,7 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
     /* Mesma selecao e mesma lista de jogos: somente troca o renderizador. */
     if(ui_game_view_get()==GAME_VIEW_CARD) {
         ui_cards_desenhar(renderer,jogos[index].arte_capa,jogos[index].nome_arquivo,
+                          jogos[index].caminho_completo_rom,
                           pos_molde,intensidade,intensidade==255);
         return;
     }
@@ -340,7 +342,8 @@ void desenhar_carousel(SDL_Rect area) {
         if(lado<64) lado=64;
         int vizinho=lado*87/100;
         int externo=lado*82/100;
-        int espaco=lado*11/100;
+        /* Mais respiro entre as capas, sem alterar o destaque central. */
+        int espaco=lado*22/100;
         if(espaco<8) espaco=8;
         int dist1=(lado+vizinho)/2+espaco;
         int dist2=dist1+(vizinho+externo)/2+espaco;
@@ -422,6 +425,7 @@ void mover_carousel_direita(void) {
 }
 
 void fechar_carousel(void) {
+    ui_cards_liberar_ajustes();
     for (size_t i = 0; i < total_consoles; ++i) {
         if (runtime_consoles && runtime_consoles[i].textura_molde)
             SDL_DestroyTexture(runtime_consoles[i].textura_molde);
