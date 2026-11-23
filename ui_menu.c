@@ -101,6 +101,8 @@ static int opcao_configuracoes = 0;
 static int total_opcoes_config = 2;
 
 static Foco foco = FOCO_CARROSSEL;
+/* Visibilidade temporaria da sidebar: nao afeta a geometria do carrossel. */
+static int sidebar_visivel = 1;
 static char aviso[128] = "";
 static Uint32 aviso_ate = 0;
 static void limpar_cache_arredondado(void);
@@ -641,8 +643,10 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 contraste_automatico=!contraste_automatico;
                 break;
             case 1:
-                contraste_automatico=0;
-                manual_preset=(Preset)((manual_preset+1)%3);
+                if(contraste_automatico) {
+                    manual_preset=auto_preset;
+                    contraste_automatico=0;
+                } else manual_preset=(Preset)((manual_preset+1)%3);
                 break;
             case 2:
                 modo_texto=(ModoTexto)((modo_texto+1)%3);
@@ -693,6 +697,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
        Segurar PageUp ou PageDown + seta esquerda entra na lateral
        sem mexer no console/cartucho selecionado. */
     if (tecla == SDLK_PAGEUP || tecla == SDLK_PAGEDOWN) {
+        sidebar_visivel=1;
         int passo = tecla == SDLK_PAGEUP ? -1 : 1;
         if (foco != FOCO_SIDEBAR) {
             foco = FOCO_SIDEBAR;
@@ -707,14 +712,16 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         const Uint8 *teclas = SDL_GetKeyboardState(NULL);
         if (teclas && (teclas[SDL_SCANCODE_PAGEUP] ||
                        teclas[SDL_SCANCODE_PAGEDOWN])) {
+            sidebar_visivel=1;
             foco = FOCO_SIDEBAR;
             return MENU_ACAO_NENHUMA;
         }
     }
 
     if (tecla == SDLK_TAB) {
-        /* TAB passa o foco para a lateral fixa, sem abrir painel. */
-        foco = foco==FOCO_SIDEBAR ? FOCO_CARROSSEL : FOCO_SIDEBAR;
+        /* Tab: ocultar/mostrar; ao restaurar, a lateral recebe foco. */
+        sidebar_visivel = !sidebar_visivel;
+        foco = sidebar_visivel ? FOCO_SIDEBAR : FOCO_CARROSSEL;
         ui_som_tocar(UI_SOM_NAVEGACAO);
         return MENU_ACAO_NENHUMA;
     }
@@ -815,7 +822,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
     }
     SDL_Rect painel_sidebar; int lista_y=0, h_item_sidebar=0;
     obter_geometria_sidebar(vh,&painel_sidebar,&lista_y,&h_item_sidebar,NULL);
-    if(mx>=painel_sidebar.x && mx<painel_sidebar.x+painel_sidebar.w &&
+    if(sidebar_visivel && mx>=painel_sidebar.x && mx<painel_sidebar.x+painel_sidebar.w &&
        my>=painel_sidebar.y && my<painel_sidebar.y+painel_sidebar.h) {
         for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
             int cy=lista_y+i*h_item_sidebar+h_item_sidebar/2;
@@ -1307,7 +1314,7 @@ void ui_menu_desenhar(void) {
     if (vh <= 0) vh = 600;
 
     desenhar_fundo(vw, vh);
-    desenhar_sidebar(vh);
+    if(sidebar_visivel) desenhar_sidebar(vh);
     desenhar_relogio(vw);
 
     /* Nunca recalcular as posicoes do carrossel ao expandir a lateral. */
@@ -1389,8 +1396,18 @@ void ui_menu_desenhar(void) {
             char nome[150];
             if(custom) {
                 switch(i) {
-                case 0: snprintf(nome,sizeof(nome),"Contraste automático: %s",contraste_automatico?"Ligado":"Desligado"); break;
-                case 1: snprintf(nome,sizeof(nome),"Preset manual: %s",nomes_presets[manual_preset]); break;
+                case 0:
+                    snprintf(nome,sizeof(nome),"Icones: %s (%s)",
+                        contraste_automatico?"Automatico":"Manual",
+                        nomes_presets[preset_ativo()]);
+                    break;
+                case 1:
+                    if(contraste_automatico)
+                        snprintf(nome,sizeof(nome),"Preset manual: Inativo");
+                    else
+                        snprintf(nome,sizeof(nome),"Preset manual: %s",
+                                 nomes_presets[preset_ativo()]);
+                    break;
                 case 2:
                     snprintf(nome,sizeof(nome),"Cor dos titulos: %s",nomes_modos_texto[modo_texto]);
                     break;
