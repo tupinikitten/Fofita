@@ -614,6 +614,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     if (tela_previa_wallpaper) {
         if(tecla==SDLK_ESCAPE) { tela_previa_wallpaper=0; preview_custom_path[0]='\0'; }
         else if((tecla==SDLK_LEFT || tecla==SDLK_RIGHT) && !preview_custom_path[0]) {
+            ui_som_tocar(UI_SOM_TROCA);
             if(total_wallpapers) {
                 preview_indice=(preview_indice+(tecla==SDLK_RIGHT?1:-1)+total_wallpapers)%total_wallpapers;
                 if(preview_textura) SDL_DestroyTexture(preview_textura);
@@ -631,9 +632,10 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     }
     if (tela_aparencia) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
-        else if(tecla==SDLK_UP) opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA;
-        else if(tecla==SDLK_DOWN) opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA;
+        else if(tecla==SDLK_UP) { opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
+        else if(tecla==SDLK_DOWN) { opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if (opcao_aparencia != 6) ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_aparencia) {
             case 0:
                 contraste_automatico=!contraste_automatico;
@@ -674,8 +676,8 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     }
     if (tela_configuracoes) {
         if(tecla==SDLK_LEFT) { tela_configuracoes=0; return MENU_ACAO_NENHUMA; }
-        if(tecla==SDLK_UP) opcao_configuracoes=(opcao_configuracoes+total_opcoes_config-1)%total_opcoes_config;
-        else if(tecla==SDLK_DOWN) opcao_configuracoes=(opcao_configuracoes+1)%total_opcoes_config;
+        if(tecla==SDLK_UP) { opcao_configuracoes=(opcao_configuracoes+total_opcoes_config-1)%total_opcoes_config; ui_som_tocar(UI_SOM_NAVEGACAO); }
+        else if(tecla==SDLK_DOWN) { opcao_configuracoes=(opcao_configuracoes+1)%total_opcoes_config; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla==SDLK_ESCAPE) tela_configuracoes=0;
         else if(tecla_confirmar(tecla)) {
             switch(opcao_configuracoes) {
@@ -698,6 +700,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
             item_lateral = (item_lateral + passo + TOTAL_ACOES_LATERAIS)
                          % TOTAL_ACOES_LATERAIS;
         }
+        ui_som_tocar(UI_SOM_NAVEGACAO);
         return MENU_ACAO_NENHUMA;
     }
     if (tecla == SDLK_LEFT) {
@@ -712,14 +715,17 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     if (tecla == SDLK_TAB) {
         /* TAB passa o foco para a lateral fixa, sem abrir painel. */
         foco = foco==FOCO_SIDEBAR ? FOCO_CARROSSEL : FOCO_SIDEBAR;
+        ui_som_tocar(UI_SOM_NAVEGACAO);
         return MENU_ACAO_NENHUMA;
     }
 
     if (foco == FOCO_SIDEBAR) {
         if (tecla == SDLK_UP) {
             item_lateral = (item_lateral + TOTAL_ACOES_LATERAIS - 1) % TOTAL_ACOES_LATERAIS;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if (tecla == SDLK_DOWN) {
             item_lateral = (item_lateral + 1) % TOTAL_ACOES_LATERAIS;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if (tecla == SDLK_RIGHT || tecla == SDLK_ESCAPE) {
             foco = FOCO_CARROSSEL;
         } else if (tecla == SDLK_LEFT) {
@@ -751,8 +757,8 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
 
     switch (foco) {
     case FOCO_CABECALHO:
-        if (tecla == SDLK_LEFT) trocar_console(-1);
-        else if (tecla == SDLK_RIGHT) trocar_console(+1);
+        if (tecla == SDLK_LEFT) { trocar_console(-1); ui_som_tocar(UI_SOM_NAVEGACAO); }
+        else if (tecla == SDLK_RIGHT) { trocar_console(+1); ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if (tecla == SDLK_DOWN || tecla_confirmar(tecla)) foco = FOCO_CARROSSEL;
         else if (tecla == SDLK_h) {
             if (modificadores & KMOD_SHIFT) mostrar_todos_consoles();
@@ -761,8 +767,8 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         break;
 
     case FOCO_CARROSSEL:
-        if (tecla == SDLK_LEFT) mover_carousel_esquerda();
-        else if (tecla == SDLK_RIGHT) mover_carousel_direita();
+        if (tecla == SDLK_LEFT) { mover_carousel_esquerda(); if(carousel_total_visiveis()>1) ui_som_tocar(UI_SOM_NAVEGACAO); }
+        else if (tecla == SDLK_RIGHT) { mover_carousel_direita(); if(carousel_total_visiveis()>1) ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if (tecla == SDLK_UP) foco = FOCO_CABECALHO;
         else if (tecla == SDLK_DOWN) foco = FOCO_CARROSSEL;
         else if (tecla_confirmar(tecla)) {
@@ -815,6 +821,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
             int cy=lista_y+i*h_item_sidebar+h_item_sidebar/2;
             int half=h_item_sidebar/2;
             if(my>=cy-half && my<cy+half) {
+                if (item_lateral != i || foco != FOCO_SIDEBAR) ui_som_tocar(UI_SOM_NAVEGACAO);
                 item_lateral=i;
                 foco=FOCO_SIDEBAR;
                 return ui_menu_tecla(SDLK_RETURN,0);
@@ -836,8 +843,8 @@ MenuAcao ui_menu_clique(int mx,int my) {
     if(cart<64) cart=64;
     int zona=cart*46/100;
     foco=FOCO_CARROSSEL;
-    if(mx<cx-zona) mover_carousel_esquerda();
-    else if(mx>cx+zona) mover_carousel_direita();
+    if(mx<cx-zona) { mover_carousel_esquerda(); if(carousel_total_visiveis()>1) ui_som_tocar(UI_SOM_NAVEGACAO); }
+    else if(mx>cx+zona) { mover_carousel_direita(); if(carousel_total_visiveis()>1) ui_som_tocar(UI_SOM_NAVEGACAO); }
     else if(my>=cy-cart/2 && my<cy+cart/2) return MENU_ACAO_INICIAR_JOGO;
     return MENU_ACAO_NENHUMA;
 }
@@ -846,6 +853,7 @@ void ui_menu_rolagem(int direcao) {
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
+    if(carousel_total_visiveis()>1) ui_som_tocar(UI_SOM_NAVEGACAO);
 }
 
 
@@ -987,15 +995,6 @@ static void desenhar_relogio(int vw) {
     }
 }
 
-static void desenhar_slot(int cx,int y) {
-    SDL_Color borda=icone_cor(LATERAL_CONFIGURACOES);
-    SDL_Rect base={cx-92,y,184,42};
-    desenhar_capsula(base,(SDL_Color){25,34,49,140},(SDL_Color){255,255,255,95});
-    SDL_Rect abertura={cx-68,y+13,136,14};
-    desenhar_capsula(abertura,(SDL_Color){8,14,28,195},(SDL_Color){220,231,244,78});
-    SDL_Rect brilho={cx-48,y+18,96,3};
-    preencher(brilho,(SDL_Color){borda.r,borda.g,borda.b,145});
-}
 /* Mantido por compatibilidade com o frontend; o rodape visual foi removido. */
 void ui_menu_controle_conectado(int sim) { (void)sim; }
 
@@ -1345,7 +1344,6 @@ void ui_menu_desenhar(void) {
     if(cart_box<64) cart_box=64;
     int titulo_y=area.y+(int)(area.h*0.47f)+cart_box/2+29;
     desenhar_linha_titulo(x_area, largura_area, titulo_y);
-    desenhar_slot(x_area+largura_area/2,titulo_y+31);
 
     if (aviso[0] && SDL_GetTicks() < aviso_ate) {
         int larg = ui_texto_largura(aviso, 2) + 24;
