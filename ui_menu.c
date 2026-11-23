@@ -419,7 +419,7 @@ static SDL_Color cor_legenda_local(SDL_Rect regiao, int suave, SDL_Color *sombra
         int claro = modo_texto == TEXTO_LIGHT;
         if (sombra)
             *sombra = claro ? (SDL_Color){9,14,24,205}
-                            : (SDL_Color){255,255,255,200};
+                            : (SDL_Color){0,0,0,0};
         return claro
             ? (suave ? (SDL_Color){213,223,240,255}
                      : (SDL_Color){248,249,255,255})
@@ -429,7 +429,9 @@ static SDL_Color cor_legenda_local(SDL_Rect regiao, int suave, SDL_Color *sombra
     int vw = 0, vh = 0;
     obter_tamanho_ui(&vw, &vh);
     if (!mapa_brilho_valido || vw <= 0 || vh <= 0) {
-        if (sombra) *sombra = cor_sombra_ui();
+        /* Em fallback, nao usar contorno branco em tipografia escura. */
+        if (sombra) *sombra = preset_ativo()==PRESET_LIGHT
+            ? (SDL_Color){9,14,24,170} : (SDL_Color){0,0,0,0};
         return suave ? cor_texto_suave_ui() : cor_texto_ui();
     }
 
@@ -449,7 +451,7 @@ static SDL_Color cor_legenda_local(SDL_Rect regiao, int suave, SDL_Color *sombra
     const int fundo_escuro = soma < 33 * 150;
     if (sombra)
         *sombra = fundo_escuro ? (SDL_Color){9,14,24,205}
-                              : (SDL_Color){255,255,255,200};
+                              : (SDL_Color){0,0,0,0};
     if (fundo_escuro)
         return suave ? (SDL_Color){213,223,240,255}
                      : (SDL_Color){248,249,255,255};
@@ -976,48 +978,51 @@ static void desenhar_capsula(SDL_Rect r,SDL_Color fundo,SDL_Color borda) {
     arredondado(r,r.h/2,fundo,0);
     arredondado(r,r.h/2,borda,1);
 }
-/* Hora e bateria diretamente sobre o wallpaper, sem fundo de pilula. */
+/* Hora em texto e icone original da bateria, sem capsula ou relogio
+   decorativo. Posicionamento calculado a partir da largura real dos textos. */
 static void desenhar_relogio(int vw) {
     time_t agora=time(NULL);
     struct tm *tm=localtime(&agora);
     if(!tm) return;
-    char horario[32]; strftime(horario,sizeof(horario),"%H:%M",tm);
+    char horario[32];
+    strftime(horario,sizeof(horario),"%H:%M",tm);
     int pct=-1;
 #ifdef _WIN32
     SYSTEM_POWER_STATUS energia;
     if(GetSystemPowerStatus(&energia) && energia.BatteryLifePercent!=255)
         pct=(int)energia.BatteryLifePercent;
 #endif
-    int inicio=vw-(pct>=0?218:105), y=21;
-    SDL_Rect faixa={inicio,y-2,pct>=0?207:100,34};
+    char porcentagem[16]="";
+    if(pct>=0) snprintf(porcentagem,sizeof(porcentagem),"%d%%",pct);
+    const int margem_direita=28, espacamento=18, largura_bateria=28;
+    const int largura_hora=ui_texto_largura(horario,1);
+    const int largura_percentual=pct>=0?ui_texto_largura(porcentagem,1):0;
+    const int largura_total=largura_hora+(pct>=0?espacamento+largura_bateria+8+largura_percentual:0);
+    const int inicio_x=vw-margem_direita-largura_total;
+    const int texto_y=19;
+    const int altura_texto=ui_texto_altura(1);
+    SDL_Rect faixa={inicio_x-5,texto_y-3,largura_total+10,altura_texto+8};
     SDL_Color sombra, tinta=cor_legenda_local(faixa,0,&sombra);
-    int cx=inicio+10, cy=y+13, raio=8;
-    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer,tinta.r,tinta.g,tinta.b,255);
-    for(int i=0;i<24;++i) {
-        float t1=(float)i*6.2831853f/24.0f;
-        float t2=(float)(i+1)*6.2831853f/24.0f;
-        SDL_RenderDrawLine(renderer,cx+(int)lroundf(cosf(t1)*raio),
-            cy+(int)lroundf(sinf(t1)*raio),
-            cx+(int)lroundf(cosf(t2)*raio),
-            cy+(int)lroundf(sinf(t2)*raio));
-    }
-    SDL_RenderDrawLine(renderer,cx,cy,cx,cy-5);
-    SDL_RenderDrawLine(renderer,cx,cy,cx+4,cy+2);
-    ui_texto_desenhar(horario,inicio+25,y-4,1,tinta,sombra);
-    if(pct>=0) {
-        int bx=inicio+106;
-        SDL_Rect corpo={bx,y+6,25,13};
-        SDL_RenderDrawRect(renderer,&corpo);
-        SDL_RenderDrawLine(renderer,bx+26,y+10,bx+26,y+15);
-        SDL_Color carga=pct<20?(SDL_Color){244,107,101,255}
-                              :(SDL_Color){91,211,158,255};
-        SDL_SetRenderDrawColor(renderer,carga.r,carga.g,carga.b,255);
-        SDL_Rect cheio={bx+2,y+8,(21*pct)/100,9};
-        if(cheio.w>0) SDL_RenderFillRect(renderer,&cheio);
-        char valor[16]; snprintf(valor,sizeof(valor),"%d%%",pct);
-        ui_texto_desenhar(valor,bx+35,y-4,1,tinta,sombra);
-    }
+    ui_texto_desenhar(horario,inicio_x,texto_y,1,tinta,sombra);
+    if(pct<0) return;
+
+    const int bateria_x=inicio_x+largura_hora+espacamento;
+    const int bateria_y=texto_y+(altura_texto-13)/2;
+    SDL_Rect corpo={bateria_x,bateria_y,25,13};
+    /* Mantem a bateria anterior: corpo com cantos arredondados,
+       terminal lateral e preenchimento colorido. */
+    arredondado(corpo,3,(SDL_Color){tinta.r,tinta.g,tinta.b,230},1);
+    preencher((SDL_Rect){corpo.x+26,corpo.y+4,2,5},
+             (SDL_Color){tinta.r,tinta.g,tinta.b,215});
+    int capacidade=pct;
+    if(capacidade<0) capacidade=0;
+    if(capacidade>100) capacidade=100;
+    SDL_Color carga=capacidade<20 ? (SDL_Color){244,108,101,245}
+                                 : (SDL_Color){110,210,160,240};
+    SDL_Rect nivel={corpo.x+2,corpo.y+2,21*capacidade/100,9};
+    if(nivel.w>0) arredondado(nivel,2,carga,0);
+    ui_texto_desenhar(porcentagem,bateria_x+largura_bateria+8,texto_y,1,
+                     tinta,sombra);
 }
 
 /* Mantido por compatibilidade com o frontend; o rodape visual foi removido. */
