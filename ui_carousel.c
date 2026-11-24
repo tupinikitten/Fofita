@@ -76,19 +76,19 @@ static int adicionar_jogo(const char *nome, const char *caminho, const ConsoleCo
     base[base_len] = '\0';
 
     jogo->arte_capa = image_processor_load_cover(renderer, console, base);
-    /* Capa digital opcional de 512x512: labels/cards/<console>/<jogo>.png.
-       Em caso de ausencia ou imagem invalida, usa a etiqueta do cartucho. */
+    /* labels/<console>/cards/<ROM sem extensao>.png, com fallback legado.
+       Nomes iguais sao esperados: as pastas distinguem as duas artes.
+       O carregamento tambem pode ser repetido depois de copiar novos PNGs. */
     char caminho_card[MAX_PATH_SIZE];
     int comprimento=snprintf(caminho_card,sizeof(caminho_card),
+                             "labels/%s/cards/%s.png",console->id,base);
+    if(comprimento>0 && (size_t)comprimento<sizeof(caminho_card))
+        jogo->arte_card=IMG_LoadTexture(renderer,caminho_card);
+    if(!jogo->arte_card) {
+        comprimento=snprintf(caminho_card,sizeof(caminho_card),
                              "labels/cards/%s/%s.png",console->id,base);
-    if(comprimento>0 && (size_t)comprimento<sizeof(caminho_card)) {
-        FILE *arq=fopen(caminho_card,"rb");
-        if(arq) {
-            fclose(arq);
+        if(comprimento>0 && (size_t)comprimento<sizeof(caminho_card))
             jogo->arte_card=IMG_LoadTexture(renderer,caminho_card);
-            if(!jogo->arte_card)
-                SDL_Log("Arte digital invalida: %s",caminho_card);
-        }
     }
 
     total_jogos++;
@@ -243,6 +243,36 @@ void carousel_definir_console(const ConsoleConfig *console) {
 }
 
 size_t carousel_total_visiveis(void) { return total_visiveis; }
+
+/* Recarrega somente capas digitais do console atual, sem mexer no foco,
+   nas ROMs, nas etiquetas fisicas nem no cartucho selecionado. */
+void carousel_recarregar_cards(void) {
+    for(size_t i=0;i<total_jogos;++i) {
+        Jogo *j=&jogos[i];
+        if(console_filtro && j->sistema!=console_filtro) continue;
+        const char *ext=strrchr(j->nome_arquivo,'.');
+        size_t len=ext?(size_t)(ext-j->nome_arquivo):strlen(j->nome_arquivo);
+        if(len>=sizeof(j->nome_arquivo)) continue;
+        char base[sizeof(j->nome_arquivo)];
+        memcpy(base,j->nome_arquivo,len);
+        base[len]='\0';
+        char path[MAX_PATH_SIZE];
+        SDL_Texture *nova=NULL;
+        int n=snprintf(path,sizeof(path),"labels/%s/cards/%s.png",
+                       j->sistema->id,base);
+        if(n>0 && (size_t)n<sizeof(path))
+            nova=IMG_LoadTexture(renderer,path);
+        if(!nova) {
+            n=snprintf(path,sizeof(path),"labels/cards/%s/%s.png",
+                       j->sistema->id,base);
+            if(n>0 && (size_t)n<sizeof(path))
+                nova=IMG_LoadTexture(renderer,path);
+        }
+        if(j->arte_card) SDL_DestroyTexture(j->arte_card);
+        j->arte_card=nova;
+    }
+}
+
 
 size_t carousel_posicao_atual(void) { return foco_atual; }
 
