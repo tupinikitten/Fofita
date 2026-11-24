@@ -89,8 +89,18 @@ static int total_wallpapers = 0;
 static int wallpaper_indice = 0;
 static int tela_aparencia = 0;
 static int opcao_aparencia = 0;
-#define TOTAL_OPCOES_APARENCIA 7
-#define ALTURA_MODAL_APARENCIA 435
+/* Submenu, sem adicionar botoes fixos a sidebar aprovada. */
+static int tela_estilo_lateral = 0;
+static int opcao_estilo_lateral = 0;
+static int sidebar_pilula = 1;
+static int consoles_cabecalho_visivel = 1;
+#define MAX_PACOTES_USUARIO 32
+#define TAM_PACOTE 48
+static char pacotes_usuario[MAX_PACOTES_USUARIO][TAM_PACOTE];
+static int total_pacotes_usuario = 0;
+static char pacote_usuario_selecionado[TAM_PACOTE] = "";
+#define TOTAL_OPCOES_APARENCIA 8
+#define ALTURA_MODAL_APARENCIA 486
 static int tela_previa_wallpaper = 0;
 static int preview_indice = 0;
 static SDL_Texture *preview_textura = NULL;
@@ -171,6 +181,13 @@ static void carregar_config(void) {
             if (strcmp(valor,"light")==0) modo_texto=TEXTO_LIGHT;
             else if (strcmp(valor,"dark")==0) modo_texto=TEXTO_DARK;
             else modo_texto=TEXTO_AUTOMATICO;
+        } else if (strncmp(linha,"sidebar_pack=",13)==0) {
+            snprintf(pacote_usuario_selecionado,
+                     sizeof(pacote_usuario_selecionado),"%s",linha+13);
+        } else if (strncmp(linha,"sidebar_pill=",13)==0) {
+            sidebar_pilula=atoi(linha+13)!=0;
+        } else if (strncmp(linha,"console_strip=",14)==0) {
+            consoles_cabecalho_visivel=atoi(linha+14)!=0;
         } else if (strncmp(linha,"game_view=",10)==0) {
             ui_game_view_set(strcmp(linha+10,"card")==0
                              ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
@@ -191,6 +208,9 @@ static void salvar_config(void) {
     fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
     fprintf(f,"text_contrast=%s\n",
             modo_texto==TEXTO_LIGHT?"light":modo_texto==TEXTO_DARK?"dark":"auto");
+    fprintf(f,"sidebar_pack=%s\nsidebar_pill=%d\nconsole_strip=%d\n",
+            pacote_usuario_selecionado,sidebar_pilula,
+            consoles_cabecalho_visivel);
 
     fclose(f);
 }
