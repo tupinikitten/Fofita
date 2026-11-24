@@ -37,6 +37,7 @@ static size_t total_visiveis = 0;
 static const ConsoleConfig *console_filtro = NULL;
 static ConsoleRuntime *runtime_consoles = NULL;
 static size_t total_consoles = 0;
+static int colunas_grade_atual = 5;
 
 static int caminho_e_diretorio(const char *path) {
     struct stat info;
@@ -381,6 +382,7 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
 static void grade_geometria(SDL_Rect area,int *colunas,int *lado,
                             int *gap_x,int *gap_y,int *y0) {
     int cols=area.w>=860?5:(area.w>=650?4:3);
+    colunas_grade_atual=cols;
     int gx=20,gy=20;
     int sz=(area.w-30-(cols-1)*gx)/cols;
     int max_h=(area.h-54-gy)/2;
@@ -411,7 +413,7 @@ static SDL_Rect grade_celula(SDL_Rect area,int cols,int lado,
 int carousel_mover_grade_vertical(int direcao) {
     if(!total_visiveis || !direcao) return 0;
     /* O movimento percorre a mesma ordem da grade com 5 colunas. */
-    size_t passo=5;
+    size_t passo=(size_t)colunas_grade_atual;
     if(direcao<0) {
         if(foco_atual<passo) return 0;
         foco_atual-=passo;
