@@ -377,44 +377,126 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
     }
 }
 
+/* Geometria compartilhada entre desenho, mouse e navegacao da grade. */
+static void grade_geometria(SDL_Rect area,int *colunas,int *lado,
+                            int *gap_x,int *gap_y,int *y0) {
+    int cols=area.w>=860?5:(area.w>=650?4:3);
+    int gx=20,gy=20;
+    int sz=(area.w-30-(cols-1)*gx)/cols;
+    int max_h=(area.h-54-gy)/2;
+    if(sz>max_h) sz=max_h;
+    if(sz>174) sz=174;
+    if(sz<32) sz=32;
+    if(colunas) *colunas=cols;
+    if(lado) *lado=sz;
+    if(gap_x) *gap_x=gx;
+    if(gap_y) *gap_y=gy;
+    if(y0) *y0=area.y+(area.h-(2*sz+gy))/2;
+}
+static SDL_Rect grade_celula(SDL_Rect area,int cols,int lado,
+                             int gap_x,int gap_y,int y0,
+                             size_t pagina_inicio,size_t pos) {
+    const int linha=(int)(pos/(size_t)cols);
+    const int coluna=(int)(pos%(size_t)cols);
+    size_t inicio_linha=pagina_inicio+(size_t)linha*(size_t)cols;
+    size_t restantes=total_visiveis>inicio_linha
+        ? total_visiveis-inicio_linha : 0;
+    int quantidade=restantes>(size_t)cols?cols:(int)restantes;
+    int largura=quantidade*lado+(quantidade-1)*gap_x;
+    return (SDL_Rect){
+        area.x+(area.w-largura)/2+coluna*(lado+gap_x),
+        y0+linha*(lado+gap_y),lado,lado
+    };
+}
+int carousel_mover_grade_vertical(int direcao) {
+    if(!total_visiveis || !direcao) return 0;
+    /* O movimento percorre a mesma ordem da grade com 5 colunas. */
+    size_t passo=5;
+    if(direcao<0) {
+        if(foco_atual<passo) return 0;
+        foco_atual-=passo;
+    } else {
+        if(foco_atual+passo>=total_visiveis) return 0;
+        foco_atual+=passo;
+    }
+    return 1;
+}
+int carousel_clicar_grade(int x,int y,SDL_Rect area) {
+    if(!total_visiveis || area.w<=0 || area.h<=0) return 0;
+    int cols,lado,gx,gy,y0;
+    grade_geometria(area,&cols,&lado,&gx,&gy,&y0);
+    size_t tamanho_pagina=(size_t)cols*2;
+    size_t inicio=(foco_atual/tamanho_pagina)*tamanho_pagina;
+    size_t fim=inicio+tamanho_pagina;
+    if(fim>total_visiveis) fim=total_visiveis;
+    for(size_t i=inicio;i<fim;++i) {
+        SDL_Rect r=grade_celula(area,cols,lado,gx,gy,y0,inicio,i-inicio);
+        if(x>=r.x && x<r.x+r.w && y>=r.y && y<r.y+r.h) {
+            if(i==foco_atual) return 2;
+            foco_atual=i;
+            return 1;
+        }
+    }
+    return 0;
+}
 void desenhar_carousel(SDL_Rect area) {
     if (total_visiveis == 0 || area.w <= 0 || area.h <= 0) return;
 
     if (ui_game_view_get()==GAME_VIEW_CARD) {
-        /* Ate cinco capas quadradas no centro, com foco emoldurado.
-           Cada indice aparece uma unica vez mesmo em bibliotecas pequenas. */
-        int lado=(int)(area.h*0.46f);
-        int largura_limite=(area.w-50)*100/486;
-        if(lado>largura_limite) lado=largura_limite;
-        if(lado>230) lado=230;
+        CardLayout layout=ui_card_layout_get();
+        if(layout==CARD_LAYOUT_GRID) {
+            int cols,lado,gx,gy,y0;
+            grade_geometria(area,&cols,&lado,&gx,&gy,&y0);
+            size_t tamanho_pagina=(size_t)cols*2;
+            size_t inicio=(foco_atual/tamanho_pagina)*tamanho_pagina;
+            size_t fim=inicio+tamanho_pagina;
+            if(fim>total_visiveis) fim=total_visiveis;
+            for(size_t i=inicio;i<fim;++i) {
+                SDL_Rect pos=grade_celula(area,cols,lado,gx,gy,y0,
+                                          inicio,i-inicio);
+                desenhar_jogo(indices[i],pos,i==foco_atual?255:230);
+            }
+            return;
+        }
+
+        /* Cartuchos nao entram nestes modos: aqui so variam capas digitais. */
+        int cinco=layout==CARD_LAYOUT_5 && total_visiveis>=5;
+        int lado=(int)(area.h*(cinco?0.46f:0.52f));
+        if(lado>245) lado=245;
         if(lado<64) lado=64;
-        int vizinho=lado*87/100;
-        int externo=lado*82/100;
-        /* Mais respiro entre as capas, sem alterar o destaque central. */
-        int espaco=lado*22/100;
-        if(espaco<8) espaco=8;
-        int dist1=(lado+vizinho)/2+espaco;
-        int dist2=dist1+(vizinho+externo)/2+espaco;
-        int cx=area.x+area.w/2, cy=area.y+(int)(area.h*0.47f);
-        if(total_visiveis>=5) {
-            size_t ee=(foco_atual+total_visiveis-2)%total_visiveis;
-            size_t dd=(foco_atual+2)%total_visiveis;
-            desenhar_jogo(indices[ee],(SDL_Rect){cx-dist2-externo/2,
-                           cy-externo/2,externo,externo},218);
-            desenhar_jogo(indices[dd],(SDL_Rect){cx+dist2-externo/2,
-                           cy-externo/2,externo,externo},218);
+        int vizinho,externo,gap,dist1,dist2;
+        for(;;) {
+            vizinho=lado*87/100;
+            externo=lado*82/100;
+            gap=lado*(cinco?18:22)/100;
+            if(gap<8) gap=8;
+            dist1=(lado+vizinho)/2+gap;
+            dist2=dist1+(vizinho+externo)/2+gap;
+            int alcance=cinco?2*dist2+externo:2*dist1+vizinho;
+            if(alcance<=area.w-25 || lado<=64) break;
+            lado-=2;
+        }
+        const int cx=area.x+area.w/2;
+        const int cy=area.y+(int)(area.h*0.47f);
+        if(cinco) {
+            size_t e2=(foco_atual+total_visiveis-2)%total_visiveis;
+            size_t d2=(foco_atual+2)%total_visiveis;
+            desenhar_jogo(indices[e2],(SDL_Rect){cx-dist2-externo/2,
+                        cy-externo/2,externo,externo},210);
+            desenhar_jogo(indices[d2],(SDL_Rect){cx+dist2-externo/2,
+                        cy-externo/2,externo,externo},210);
         }
         if(total_visiveis>=3) {
-            size_t e=(foco_atual+total_visiveis-1)%total_visiveis;
-            size_t d=(foco_atual+1)%total_visiveis;
-            desenhar_jogo(indices[e],(SDL_Rect){cx-dist1-vizinho/2,
-                           cy-vizinho/2,vizinho,vizinho},235);
-            desenhar_jogo(indices[d],(SDL_Rect){cx+dist1-vizinho/2,
-                           cy-vizinho/2,vizinho,vizinho},235);
+            size_t esq=(foco_atual+total_visiveis-1)%total_visiveis;
+            size_t dir=(foco_atual+1)%total_visiveis;
+            desenhar_jogo(indices[esq],(SDL_Rect){cx-dist1-vizinho/2,
+                         cy-vizinho/2,vizinho,vizinho},235);
+            desenhar_jogo(indices[dir],(SDL_Rect){cx+dist1-vizinho/2,
+                         cy-vizinho/2,vizinho,vizinho},235);
         } else if(total_visiveis==2) {
             size_t outro=(foco_atual+1)%total_visiveis;
             desenhar_jogo(indices[outro],(SDL_Rect){cx+dist1-vizinho/2,
-                           cy-vizinho/2,vizinho,vizinho},235);
+                         cy-vizinho/2,vizinho,vizinho},235);
         }
         desenhar_jogo(indices[foco_atual],(SDL_Rect){cx-lado/2,
                        cy-lado/2,lado,lado},255);
