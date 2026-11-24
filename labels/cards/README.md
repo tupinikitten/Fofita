@@ -27,9 +27,9 @@ Depois de adicionar novos PNGs com a Fofita aberta, pressione **F5** no modo Car
 
 ## Layout dos cards
 
-Em Aparencia > Layout digital, selecione:
+Em **Customizacao > Visualizacao dos jogos**, existem opcoes separadas para:
 - **3 cards** (padrao): um principal e vizinhos
 - **5 cards**: ate dois vizinhos de cada lado, se houver jogos suficientes
 - **Grade**: ate duas fileiras paginadas, com selecao por teclado, controle ou mouse
 
-Essa escolha nao modifica o modo Cartuchos e fica salva em `fofita_menu.cfg`.
+Selecionar um dos tres layouts ativa o modo Cards; a opcao **Exibicao: Cartuchos / Cards** permite voltar ao visual fisico sem perder o layout escolhido. A preferencia fica salva em `fofita_menu.cfg`.
