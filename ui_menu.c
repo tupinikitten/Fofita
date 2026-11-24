@@ -804,6 +804,24 @@ void ui_menu_aviso(const char *mensagem) {
     aviso_ate = SDL_GetTicks() + DURACAO_AVISO_MS;
 }
 
+/* Mostra se a imagem de cards realmente foi encontrada. Isso distingue
+   "recarregou" de "carregou uma nova capa" sem confundir com as etiquetas. */
+static void avisar_status_cards(void) {
+    char mensagem[128];
+    size_t quantidade=carousel_contar_cards_exclusivos();
+    const ConsoleConfig *c=console_selecionado();
+    if(!quantidade && c) {
+        snprintf(mensagem,sizeof(mensagem),
+                 "0 cards exclusivos: confira labels/%s/cards/",
+                 c->id);
+    } else {
+        snprintf(mensagem,sizeof(mensagem),
+                 "%zu capa(s) digital(is) exclusiva(s) encontrada(s)",
+                 quantidade);
+    }
+    ui_menu_aviso(mensagem);
+}
+
 static int tecla_confirmar(SDL_Keycode t) {
     return t == SDLK_RETURN || t == SDLK_KP_ENTER || t == SDLK_x;
 }
@@ -965,7 +983,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
             }
             case 4:
                 carousel_recarregar_cards();
-                ui_menu_aviso("Capas digitais recarregadas");
+                avisar_status_cards();
                 break;
             case 5: tela_visualizacao=0; break;
             }
@@ -1036,7 +1054,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     if(tecla==SDLK_F5 && !tela_configuracoes &&
        ui_game_view_get()==GAME_VIEW_CARD) {
         carousel_recarregar_cards();
-        ui_menu_aviso("Capas digitais recarregadas");
+        avisar_status_cards();
         ui_som_tocar(UI_SOM_TROCA);
         return MENU_ACAO_NENHUMA;
     }
