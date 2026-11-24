@@ -1197,7 +1197,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
 void ui_menu_rolagem(int direcao) {
     if(ui_cards_editando() || tela_previa_wallpaper ||
        tela_aparencia || tela_configuracoes || tela_estilo_lateral ||
-       !direcao) return;
+       tela_estilo_consoles || !direcao) return;
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
