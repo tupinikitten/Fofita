@@ -12,6 +12,8 @@ void mover_carousel_esquerda(void);
 void mover_carousel_direita(void);
 void fechar_carousel(void);
 void carousel_recarregar_cards(void);
+/* Quantidade de capas exclusivas reconhecidas para o console em uso. */
+size_t carousel_contar_cards_exclusivos(void);
 /* Grade digital: navegacao vertical e clique nos cards visiveis.
    O clique retorna 0 fora, 1 ao selecionar, 2 no card ja selecionado. */
 int carousel_mover_grade_vertical(int direcao);
