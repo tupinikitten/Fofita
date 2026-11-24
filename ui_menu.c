@@ -377,23 +377,100 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
 static SDL_Texture *carregar_icone_tingido(const char *caminho,SDL_Color cor) {
     return icone_textura_suavizada(caminho,&cor);
 }
-/* Caminho canonico por preset: sem imagens antigas nem fallback cruzado. */
+/* Nomes simples, sem barras nem traversal, para selecionar pacotes locais. */
+static int nome_pacote_valido(const char *nome) {
+    if(!nome || !*nome) return 0;
+    size_t n=strlen(nome);
+    if(n>32 || n>=TAM_PACOTE) return 0;
+    if(!strcmp(nome,"light") || !strcmp(nome,"dark") ||
+       !strcmp(nome,"colorful")) return 0;
+    for(size_t i=0;i<n;++i) {
+        unsigned char c=(unsigned char)nome[i];
+        if(!((c>='A'&&c<='Z') || (c>='a'&&c<='z') ||
+             (c>='0'&&c<='9') || c=='_' || c=='-')) return 0;
+    }
+    return 1;
+}
+static int ordenar_pacotes(const void *a,const void *b) {
+    return strcmp((const char *)a,(const char *)b);
+}
+static int pacote_completo(const char *nome) {
+    for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
+        char caminho[256];
+        int n=snprintf(caminho,sizeof(caminho),
+                "ui/styles/%s/icons/%s_icon_%s.png",
+                nome,nomes_arquivos[i],nome);
+        if(n<=0 || (size_t)n>=sizeof(caminho)) return 0;
+        FILE *f=fopen(caminho,"rb");
+        if(!f) return 0;
+        fclose(f);
+    }
+    return 1;
+}
+static void escanear_pacotes_usuario(void) {
+    total_pacotes_usuario=0;
+    DIR *dir=opendir("ui/styles");
+    if(dir) {
+        struct dirent *entrada;
+        while((entrada=readdir(dir))!=NULL &&
+              total_pacotes_usuario<MAX_PACOTES_USUARIO) {
+            if(!nome_pacote_valido(entrada->d_name) ||
+               !pacote_completo(entrada->d_name)) continue;
+            snprintf(pacotes_usuario[total_pacotes_usuario++],
+                     TAM_PACOTE,"%s",entrada->d_name);
+        }
+        closedir(dir);
+    }
+    qsort(pacotes_usuario,(size_t)total_pacotes_usuario,
+          sizeof(pacotes_usuario[0]),ordenar_pacotes);
+    if(pacote_usuario_selecionado[0]) {
+        int existe=0;
+        for(int i=0;i<total_pacotes_usuario;++i)
+            if(!strcmp(pacote_usuario_selecionado,pacotes_usuario[i]))
+                existe=1;
+        if(!existe) pacote_usuario_selecionado[0]='\0';
+    }
+}
+static void proximo_pacote_usuario(void) {
+    int atual=0; /* 0=padrao, 1..N=pacotes personalizados */
+    for(int i=0;i<total_pacotes_usuario;++i)
+        if(!strcmp(pacote_usuario_selecionado,pacotes_usuario[i]))
+            atual=i+1;
+    atual=(atual+1)%(total_pacotes_usuario+1);
+    if(atual==0) pacote_usuario_selecionado[0]='\0';
+    else snprintf(pacote_usuario_selecionado,
+                  sizeof(pacote_usuario_selecionado),"%s",
+                  pacotes_usuario[atual-1]);
+}
+/* Pacotes pessoais preservam as cores RGB de seus proprios PNGs.
+   Os tres presets canonicos continuam com seu carregamento original. */
 static void carregar_icones_preset(void) {
     const Preset preset=preset_ativo();
     const char *pasta=preset==PRESET_LIGHT?"light":
                       preset==PRESET_DARK?"dark":"colorful";
+    const int custom=pacote_usuario_selecionado[0]!='\0';
     for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
         if(icones_laterais[i]) {
             SDL_DestroyTexture(icones_laterais[i]);
             icones_laterais[i]=NULL;
         }
         char caminho[256];
-        snprintf(caminho,sizeof(caminho),"ui/styles/%s/icons/%s_icon_%s.png",
-                 pasta,nomes_arquivos[i],pasta);
-        if(preset==PRESET_COLORFUL)
+        if(custom) {
+            snprintf(caminho,sizeof(caminho),
+                     "ui/styles/%s/icons/%s_icon_%s.png",
+                     pacote_usuario_selecionado,nomes_arquivos[i],
+                     pacote_usuario_selecionado);
             icones_laterais[i]=icone_textura_suavizada(caminho,NULL);
-        else
-            icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
+        }
+        if(!icones_laterais[i]) {
+            snprintf(caminho,sizeof(caminho),
+                     "ui/styles/%s/icons/%s_icon_%s.png",
+                     pasta,nomes_arquivos[i],pasta);
+            if(preset==PRESET_COLORFUL)
+                icones_laterais[i]=icone_textura_suavizada(caminho,NULL);
+            else
+                icones_laterais[i]=carregar_icone_tingido(caminho,icone_cor(i));
+        }
         if(!icones_laterais[i])
             fprintf(stderr,"Fofita: icone de estilo ausente: %s\n",caminho);
     }
@@ -574,6 +651,7 @@ int ui_menu_init(void) {
     }
 
     carregar_config();
+    escanear_pacotes_usuario();
     listar_wallpapers();
     atualizar_wallpaper(wallpaper_path,0);
 
