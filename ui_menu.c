@@ -240,6 +240,10 @@ static void trocar_console(int direcao) {
     if (total_visiveis < 2) return;
     sel = (sel + direcao + total_visiveis) % total_visiveis;
     aplicar_selecao();
+    if(!consoles_cabecalho_visivel) {
+        const ConsoleConfig *c=console_selecionado();
+        if(c) ui_menu_aviso(c->nome);
+    }
 }
 
 static void ocultar_console_atual(void) {
@@ -756,12 +760,51 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         }
         return MENU_ACAO_NENHUMA;
     }
+    if (tela_estilo_lateral) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT)
+            tela_estilo_lateral=0;
+        else if(tecla==SDLK_UP) {
+            opcao_estilo_lateral=(opcao_estilo_lateral+4)%5;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_estilo_lateral=(opcao_estilo_lateral+1)%5;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_estilo_lateral!=4) ui_som_tocar(UI_SOM_TROCA);
+            switch(opcao_estilo_lateral) {
+            case 0:
+                if(total_pacotes_usuario>0) {
+                    proximo_pacote_usuario();
+                    carregar_icones_preset();
+                } else ui_menu_aviso("Adicione um pacote completo em ui/styles/");
+                break;
+            case 1:
+                sidebar_pilula=!sidebar_pilula;
+                break;
+            case 2:
+                consoles_cabecalho_visivel=!consoles_cabecalho_visivel;
+                if(!consoles_cabecalho_visivel && foco==FOCO_CABECALHO)
+                    foco=FOCO_CARROSSEL;
+                break;
+            case 3:
+                escanear_pacotes_usuario();
+                carregar_icones_preset();
+                ui_menu_aviso("Lista de estilos atualizada");
+                break;
+            case 4:
+                tela_estilo_lateral=0;
+                break;
+            }
+            salvar_config();
+        }
+        return MENU_ACAO_NENHUMA;
+    }
     if (tela_aparencia) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
         else if(tecla==SDLK_UP) { opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla==SDLK_DOWN) { opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if (opcao_aparencia != 6) ui_som_tocar(UI_SOM_TROCA);
+            if (opcao_aparencia != 7) ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_aparencia) {
             case 0:
                 contraste_automatico=!contraste_automatico;
@@ -793,6 +836,11 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1);
                 break;
             case 6:
+                escanear_pacotes_usuario();
+                tela_estilo_lateral=1;
+                opcao_estilo_lateral=0;
+                break;
+            case 7:
                 tela_aparencia=0;
                 break;
             }
@@ -935,18 +983,21 @@ MenuAcao ui_menu_clique(int mx,int my) {
     obter_tamanho_ui(&vw,&vh);
     if(vw<=0 || vh<=0) return MENU_ACAO_NENHUMA;
     if(ui_cards_editando() || tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
-    if(tela_aparencia || tela_configuracoes) {
-        int custom=tela_aparencia;
-        int n=custom?TOTAL_OPCOES_APARENCIA:2;
-        int pw=custom?360:340;
+    if(tela_aparencia || tela_configuracoes || tela_estilo_lateral) {
+        int sub=tela_estilo_lateral;
+        int custom=tela_aparencia && !sub;
+        int n=sub?5:(custom?TOTAL_OPCOES_APARENCIA:2);
+        int pw=sub?440:(custom?360:340);
         if(pw>vw-42) pw=vw-42;
-        int ph=custom?ALTURA_MODAL_APARENCIA:178;
+        int ph=sub?334:(custom?ALTURA_MODAL_APARENCIA:178);
         if(ph>vh-46) ph=vh-46;
         int x=(vw-pw)/2;
         int y=(vh-ph)/2;
-        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*(custom?50:45)) {
-            int item=(my-y-59)/(custom?50:45);
-            if(custom) opcao_aparencia=item;
+        int passo=(custom||sub)?50:45;
+        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*passo) {
+            int item=(my-y-59)/passo;
+            if(sub) opcao_estilo_lateral=item;
+            else if(custom) opcao_aparencia=item;
             else opcao_configuracoes=item;
             return ui_menu_tecla(SDLK_RETURN,0);
         }
@@ -989,7 +1040,8 @@ MenuAcao ui_menu_clique(int mx,int my) {
 }
 void ui_menu_rolagem(int direcao) {
     if(ui_cards_editando() || tela_previa_wallpaper ||
-       tela_aparencia || tela_configuracoes || !direcao) return;
+       tela_aparencia || tela_configuracoes || tela_estilo_lateral ||
+       !direcao) return;
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
@@ -1417,21 +1469,23 @@ static void desenhar_sidebar(int vh) {
     SDL_Rect painel;
     int lista_y=0,h_item=0;
     obter_geometria_sidebar(vh,&painel,&lista_y,&h_item,NULL);
-    /* Vidro suave: preserva mais wallpaper do que a lateral anterior. */
-    arredondado((SDL_Rect){painel.x+2,painel.y+3,painel.w,painel.h},
-                painel.w/2,(SDL_Color){12,23,45,22},0);
+    /* Vidro opcional: os icones podem flutuar diretamente no wallpaper. */
     SDL_Color vidro = preset==PRESET_LIGHT
         ? (SDL_Color){25,37,73,142}
         : (SDL_Color){221,238,251,148};
     SDL_Color borda = preset==PRESET_LIGHT
         ? (SDL_Color){218,231,255,100}
         : (SDL_Color){255,255,255,153};
-    desenhar_capsula(painel,vidro,borda);
+    if(sidebar_pilula) {
+        arredondado((SDL_Rect){painel.x+2,painel.y+3,painel.w,painel.h},
+                    painel.w/2,(SDL_Color){12,23,45,22},0);
+        desenhar_capsula(painel,vidro,borda);
+    }
     for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
         int cy=lista_y+i*h_item+h_item/2;
         SDL_Rect item={painel.x+8,cy-21,painel.w-16,42};
         SDL_Color cor=icone_cor(i);
-        if(i==LATERAL_SAIR)
+        if(i==LATERAL_SAIR && sidebar_pilula)
             preencher((SDL_Rect){painel.x+15,cy-h_item/2-4,
                                   painel.w-30,1},
                      preset==PRESET_LIGHT ? (SDL_Color){228,235,255,82}
@@ -1476,7 +1530,8 @@ void ui_menu_desenhar(void) {
     int largura_area = vw - SIDEBAR_RECOLHIDA;
     if (largura_area < 1) largura_area = 1;
 
-    desenhar_cabecalho(x_area, largura_area);
+    if(consoles_cabecalho_visivel)
+        desenhar_cabecalho(x_area, largura_area);
 
     SDL_Rect area = { x_area, ALTURA_CABECALHO, largura_area,
                       vh - ALTURA_CABECALHO - ALTURA_TITULO - AREA_ANIMACAO_FUTURA };
