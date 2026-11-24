@@ -11,6 +11,7 @@ void desenhar_carousel(SDL_Rect area);
 void mover_carousel_esquerda(void);
 void mover_carousel_direita(void);
 void fechar_carousel(void);
+void carousel_recarregar_cards(void);
 const char *obter_caminho_jogo_atual(void);
 
 /* Mostra so os jogos de 'console' (NULL = todos) e volta o foco para o primeiro. */
