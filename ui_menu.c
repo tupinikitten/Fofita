@@ -1126,20 +1126,23 @@ MenuAcao ui_menu_clique(int mx,int my) {
     obter_tamanho_ui(&vw,&vh);
     if(vw<=0 || vh<=0) return MENU_ACAO_NENHUMA;
     if(ui_cards_editando() || tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
-    if(tela_aparencia || tela_configuracoes || tela_estilo_lateral) {
+    if(tela_aparencia || tela_configuracoes ||
+       tela_estilo_lateral || tela_estilo_consoles) {
         int sub=tela_estilo_lateral;
-        int custom=tela_aparencia && !sub;
-        int n=sub?5:(custom?TOTAL_OPCOES_APARENCIA:2);
-        int pw=sub?440:(custom?360:340);
+        int cons=tela_estilo_consoles;
+        int custom=tela_aparencia && !sub && !cons;
+        int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:2));
+        int pw=cons?445:(sub?440:(custom?395:340));
         if(pw>vw-42) pw=vw-42;
-        int ph=sub?334:(custom?ALTURA_MODAL_APARENCIA:178);
+        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:178));
         if(ph>vh-46) ph=vh-46;
         int x=(vw-pw)/2;
         int y=(vh-ph)/2;
-        int passo=(custom||sub)?50:45;
+        int passo=(custom||sub||cons)?50:45;
         if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*passo) {
             int item=(my-y-59)/passo;
-            if(sub) opcao_estilo_lateral=item;
+            if(cons) opcao_estilo_consoles=item;
+            else if(sub) opcao_estilo_lateral=item;
             else if(custom) opcao_aparencia=item;
             else opcao_configuracoes=item;
             return ui_menu_tecla(SDLK_RETURN,0);
@@ -1168,6 +1171,16 @@ MenuAcao ui_menu_clique(int mx,int my) {
     if(mx<faixa.x || mx>faixa.x+faixa.w || my<faixa.y || my>faixa.y+faixa.h+ALTURA_TITULO)
         return MENU_ACAO_NENHUMA;
     if(!carousel_total_visiveis()) return MENU_ACAO_NENHUMA;
+    if(ui_game_view_get()==GAME_VIEW_CARD &&
+       ui_card_layout_get()==CARD_LAYOUT_GRID) {
+        int resultado=carousel_clicar_grade(mx,my,faixa);
+        if(resultado) {
+            foco=FOCO_CARROSSEL;
+            if(resultado==2) return MENU_ACAO_INICIAR_JOGO;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        }
+        return MENU_ACAO_NENHUMA;
+    }
     int cx=faixa.x+faixa.w/2;
     int cy=faixa.y+(int)(faixa.h*0.47f);
     int cart=(int)(faixa.h*0.62f);
@@ -1702,6 +1715,15 @@ void ui_menu_desenhar(void) {
     if(cart_box>340) cart_box=340;
     if(cart_box<64) cart_box=64;
     int titulo_y=area.y+(int)(area.h*0.47f)+cart_box/2+29;
+    if(ui_game_view_get()==GAME_VIEW_CARD) {
+        if(ui_card_layout_get()==CARD_LAYOUT_GRID) {
+            titulo_y=area.y+area.h+7;
+        } else {
+            int lado=(int)(area.h*(ui_card_layout_get()==CARD_LAYOUT_5?0.46f:0.52f));
+            if(lado>245) lado=245;
+            titulo_y=area.y+(int)(area.h*0.47f)+lado/2+34;
+        }
+    }
     desenhar_linha_titulo(x_area, largura_area, titulo_y);
 
     if (aviso[0] && SDL_GetTicks() < aviso_ate) {
