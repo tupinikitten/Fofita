@@ -19,6 +19,7 @@ typedef struct {
     char nome_arquivo[256];
     char caminho_completo_rom[MAX_PATH_SIZE];
     SDL_Texture *arte_capa;
+    SDL_Texture *arte_card; /* Arte quadrada opcional, independente do cartucho. */
     const ConsoleConfig *sistema;
 } Jogo;
 
@@ -75,6 +76,20 @@ static int adicionar_jogo(const char *nome, const char *caminho, const ConsoleCo
     base[base_len] = '\0';
 
     jogo->arte_capa = image_processor_load_cover(renderer, console, base);
+    /* Capa digital opcional de 512x512: labels/cards/<console>/<jogo>.png.
+       Em caso de ausencia ou imagem invalida, usa a etiqueta do cartucho. */
+    char caminho_card[MAX_PATH_SIZE];
+    int comprimento=snprintf(caminho_card,sizeof(caminho_card),
+                             "labels/cards/%s/%s.png",console->id,base);
+    if(comprimento>0 && (size_t)comprimento<sizeof(caminho_card)) {
+        FILE *arq=fopen(caminho_card,"rb");
+        if(arq) {
+            fclose(arq);
+            jogo->arte_card=IMG_LoadTexture(renderer,caminho_card);
+            if(!jogo->arte_card)
+                SDL_Log("Arte digital invalida: %s",caminho_card);
+        }
+    }
 
     total_jogos++;
     return 1;
@@ -255,7 +270,10 @@ const char *obter_caminho_jogo_atual(void) {
 static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
     /* Mesma selecao e mesma lista de jogos: somente troca o renderizador. */
     if(ui_game_view_get()==GAME_VIEW_CARD) {
-        ui_cards_desenhar(renderer,jogos[index].arte_capa,jogos[index].nome_arquivo,
+        ui_cards_desenhar(renderer,
+                          jogos[index].arte_card ? jogos[index].arte_card
+                                                 : jogos[index].arte_capa,
+                          jogos[index].nome_arquivo,
                           jogos[index].caminho_completo_rom,
                           pos_molde,intensidade,intensidade==255);
         return;
@@ -434,6 +452,8 @@ void fechar_carousel(void) {
     for (size_t i = 0; i < total_jogos; ++i) {
         if (jogos[i].arte_capa)
             SDL_DestroyTexture(jogos[i].arte_capa);
+        if (jogos[i].arte_card)
+            SDL_DestroyTexture(jogos[i].arte_card);
     }
 
     free(runtime_consoles);
