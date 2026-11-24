@@ -12,6 +12,10 @@ void mover_carousel_esquerda(void);
 void mover_carousel_direita(void);
 void fechar_carousel(void);
 void carousel_recarregar_cards(void);
+/* Grade digital: navegacao vertical e clique nos cards visiveis.
+   O clique retorna 0 fora, 1 ao selecionar, 2 no card ja selecionado. */
+int carousel_mover_grade_vertical(int direcao);
+int carousel_clicar_grade(int x,int y,SDL_Rect area);
 const char *obter_caminho_jogo_atual(void);
 
 /* Mostra so os jogos de 'console' (NULL = todos) e volta o foco para o primeiro. */
