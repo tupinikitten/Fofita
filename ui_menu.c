@@ -99,8 +99,14 @@ static int consoles_cabecalho_visivel = 1;
 static char pacotes_usuario[MAX_PACOTES_USUARIO][TAM_PACOTE];
 static int total_pacotes_usuario = 0;
 static char pacote_usuario_selecionado[TAM_PACOTE] = "";
-#define TOTAL_OPCOES_APARENCIA 8
-#define ALTURA_MODAL_APARENCIA 486
+/* Aparencia dos icones dos consoles, independente do pacote da sidebar. */
+static int tela_estilo_consoles = 0;
+static int opcao_estilo_consoles = 0;
+static char pacote_consoles[TAM_PACOTE] = "";
+static char pacotes_consoles[MAX_PACOTES_USUARIO][TAM_PACOTE];
+static int total_pacotes_consoles = 0;
+#define TOTAL_OPCOES_APARENCIA 10
+#define ALTURA_MODAL_APARENCIA 583
 static int tela_previa_wallpaper = 0;
 static int preview_indice = 0;
 static SDL_Texture *preview_textura = NULL;
@@ -188,6 +194,14 @@ static void carregar_config(void) {
             sidebar_pilula=atoi(linha+13)!=0;
         } else if (strncmp(linha,"console_strip=",14)==0) {
             consoles_cabecalho_visivel=atoi(linha+14)!=0;
+        } else if (strncmp(linha,"console_icon_pack=",18)==0) {
+            snprintf(pacote_consoles,sizeof(pacote_consoles),
+                     "%s",linha+18);
+        } else if (strncmp(linha,"card_layout=",12)==0) {
+            const char *valor=linha+12;
+            if(!strcmp(valor,"five")) ui_card_layout_set(CARD_LAYOUT_5);
+            else if(!strcmp(valor,"grid")) ui_card_layout_set(CARD_LAYOUT_GRID);
+            else ui_card_layout_set(CARD_LAYOUT_3);
         } else if (strncmp(linha,"game_view=",10)==0) {
             ui_game_view_set(strcmp(linha+10,"card")==0
                              ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
@@ -206,11 +220,15 @@ static void salvar_config(void) {
     fprintf(f,"wallpaper=%s\nicon_auto=%d\nicon_manual=%d\n",
             wallpaper_path,contraste_automatico,(int)manual_preset);
     fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
+    fprintf(f,"card_layout=%s\n",
+            ui_card_layout_get()==CARD_LAYOUT_GRID?"grid":
+            ui_card_layout_get()==CARD_LAYOUT_5?"five":"three");
     fprintf(f,"text_contrast=%s\n",
             modo_texto==TEXTO_LIGHT?"light":modo_texto==TEXTO_DARK?"dark":"auto");
     fprintf(f,"sidebar_pack=%s\nsidebar_pill=%d\nconsole_strip=%d\n",
             pacote_usuario_selecionado,sidebar_pilula,
             consoles_cabecalho_visivel);
+    fprintf(f,"console_icon_pack=%s\n",pacote_consoles);
 
     fclose(f);
 }
