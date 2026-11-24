@@ -1163,31 +1163,72 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     return MENU_ACAO_NENHUMA;
 }
 
+/* Mesma geometria para renderizacao e hit-test (mouse/controle/teclado).
+   Nenhum item fica fora do painel quando a janela e menor. */
+typedef enum {
+    MODAL_NENHUM, MODAL_CONFIG, MODAL_CUSTOMIZACAO,
+    MODAL_BARRA_LATERAL, MODAL_CONSOLES, MODAL_JOGOS
+} MenuModal;
+
+static MenuModal menu_modal_atual(void) {
+    if(tela_estilo_lateral) return MODAL_BARRA_LATERAL;
+    if(tela_estilo_consoles) return MODAL_CONSOLES;
+    if(tela_visualizacao) return MODAL_JOGOS;
+    if(tela_aparencia) return MODAL_CUSTOMIZACAO;
+    if(tela_configuracoes) return MODAL_CONFIG;
+    return MODAL_NENHUM;
+}
+static int menu_modal_quantidade(MenuModal m) {
+    switch(m) {
+    case MODAL_BARRA_LATERAL: return TOTAL_OPCOES_LATERAL;
+    case MODAL_CONSOLES: return TOTAL_OPCOES_CONSOLES;
+    case MODAL_JOGOS: return TOTAL_OPCOES_VISUALIZACAO;
+    case MODAL_CUSTOMIZACAO: return TOTAL_OPCOES_APARENCIA;
+    case MODAL_CONFIG: return total_opcoes_config;
+    default: return 0;
+    }
+}
+static SDL_Rect menu_modal_geometria(MenuModal m,int vw,int vh,int *passo) {
+    int n=menu_modal_quantidade(m);
+    int largura=m==MODAL_BARRA_LATERAL?460:
+                m==MODAL_CONSOLES?450:
+                m==MODAL_JOGOS?460:
+                m==MODAL_CUSTOMIZACAO?435:340;
+    if(largura>vw-42) largura=vw-42;
+    if(largura<200) largura=200;
+    int altura=75+n*(m==MODAL_CONFIG?45:50);
+    if(altura>vh-46) altura=vh-46;
+    if(altura<90) altura=90;
+    int passo_linha=(altura-67)/(n?n:1);
+    if(passo_linha>50) passo_linha=50;
+    if(passo_linha<16) passo_linha=16;
+    if(passo) *passo=passo_linha;
+    return (SDL_Rect){(vw-largura)/2,(vh-altura)/2,largura,altura};
+}
 /* Clique em qualquer cartucho lateral move o mesmo indice do titulo. */
 MenuAcao ui_menu_clique(int mx,int my) {
     int vw=0,vh=0;
     obter_tamanho_ui(&vw,&vh);
     if(vw<=0 || vh<=0) return MENU_ACAO_NENHUMA;
     if(ui_cards_editando() || tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
-    if(tela_aparencia || tela_configuracoes ||
-       tela_estilo_lateral || tela_estilo_consoles) {
-        int sub=tela_estilo_lateral;
-        int cons=tela_estilo_consoles;
-        int custom=tela_aparencia && !sub && !cons;
-        int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:2));
-        int pw=cons?445:(sub?440:(custom?395:340));
-        if(pw>vw-42) pw=vw-42;
-        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:178));
-        if(ph>vh-46) ph=vh-46;
-        int x=(vw-pw)/2;
-        int y=(vh-ph)/2;
-        int passo=(custom||sub||cons)?50:45;
-        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*passo) {
-            int item=(my-y-59)/passo;
-            if(cons) opcao_estilo_consoles=item;
-            else if(sub) opcao_estilo_lateral=item;
-            else if(custom) opcao_aparencia=item;
-            else opcao_configuracoes=item;
+    MenuModal modal=menu_modal_atual();
+    if(modal!=MODAL_NENHUM) {
+        int passo=0;
+        SDL_Rect painel=menu_modal_geometria(modal,vw,vh,&passo);
+        int n=menu_modal_quantidade(modal);
+        int y0=painel.y+59;
+        if(mx>=painel.x+11 && mx<painel.x+painel.w-11 &&
+           my>=y0 && my<y0+n*passo) {
+            int item=(my-y0)/passo;
+            if(item<0 || item>=n) return MENU_ACAO_NENHUMA;
+            switch(modal) {
+            case MODAL_BARRA_LATERAL: opcao_estilo_lateral=item; break;
+            case MODAL_CONSOLES: opcao_estilo_consoles=item; break;
+            case MODAL_JOGOS: opcao_visualizacao=item; break;
+            case MODAL_CUSTOMIZACAO: opcao_aparencia=item; break;
+            case MODAL_CONFIG: opcao_configuracoes=item; break;
+            default: break;
+            }
             return ui_menu_tecla(SDLK_RETURN,0);
         }
         return MENU_ACAO_NENHUMA;
