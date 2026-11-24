@@ -10,3 +10,12 @@ void ui_game_view_set(GameViewMode mode) {
 GameViewMode ui_game_view_get(void) {
     return modo_atual;
 }
+
+/* Tres alternativas do mesmo catalogo; o foco nao e reinicializado. */
+static CardLayout layout_cards_atual = CARD_LAYOUT_3;
+void ui_card_layout_set(CardLayout layout) {
+    if(layout!=CARD_LAYOUT_5 && layout!=CARD_LAYOUT_GRID)
+        layout=CARD_LAYOUT_3;
+    layout_cards_atual=layout;
+}
+CardLayout ui_card_layout_get(void) { return layout_cards_atual; }
