@@ -885,12 +885,41 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         }
         return MENU_ACAO_NENHUMA;
     }
+    if (tela_estilo_consoles) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) {
+            tela_estilo_consoles=0;
+        } else if(tecla==SDLK_UP) {
+            opcao_estilo_consoles=(opcao_estilo_consoles+2)%3;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_estilo_consoles=(opcao_estilo_consoles+1)%3;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_estilo_consoles!=2) ui_som_tocar(UI_SOM_TROCA);
+            switch(opcao_estilo_consoles) {
+            case 0:
+                if(total_pacotes_consoles>0) {
+                    proximo_pacote_consoles();
+                    recarregar_icones_consoles();
+                } else ui_menu_aviso("Copie icones em ui/consoles/styles/");
+                break;
+            case 1:
+                escanear_pacotes_consoles();
+                recarregar_icones_consoles();
+                ui_menu_aviso("Pacotes de consoles atualizados");
+                break;
+            case 2: tela_estilo_consoles=0; break;
+            }
+            salvar_config();
+        }
+        return MENU_ACAO_NENHUMA;
+    }
     if (tela_aparencia) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
         else if(tecla==SDLK_UP) { opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla==SDLK_DOWN) { opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if (opcao_aparencia != 7) ui_som_tocar(UI_SOM_TROCA);
+            if (opcao_aparencia != 9) ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_aparencia) {
             case 0:
                 contraste_automatico=!contraste_automatico;
@@ -907,8 +936,13 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
             case 3:
                 ui_game_view_set(ui_game_view_get()==GAME_VIEW_CARTRIDGE
                                   ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
+                if(ui_game_view_get()==GAME_VIEW_CARD)
+                    carousel_recarregar_cards();
                 break;
             case 4:
+                ui_card_layout_set((CardLayout)((ui_card_layout_get()+1)%3));
+                break;
+            case 5:
                 listar_wallpapers();
                 preview_indice=wallpaper_indice;
                 preview_custom_path[0]='\0';
@@ -918,15 +952,20 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 if(total_wallpapers) tela_previa_wallpaper=1;
                 else ui_menu_aviso("Nenhum wallpaper disponivel");
                 break;
-            case 5:
+            case 6:
                 atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1);
                 break;
-            case 6:
+            case 7:
                 escanear_pacotes_usuario();
                 tela_estilo_lateral=1;
                 opcao_estilo_lateral=0;
                 break;
-            case 7:
+            case 8:
+                escanear_pacotes_consoles();
+                tela_estilo_consoles=1;
+                opcao_estilo_consoles=0;
+                break;
+            case 9:
                 tela_aparencia=0;
                 break;
             }
@@ -947,6 +986,15 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
             case 1: tela_configuracoes=0; break;
             }
         }
+        return MENU_ACAO_NENHUMA;
+    }
+
+    /* Atualiza imagens adicionadas apos a inicializacao, sem mudar a ROM. */
+    if(tecla==SDLK_F5 && !tela_configuracoes &&
+       ui_game_view_get()==GAME_VIEW_CARD) {
+        carousel_recarregar_cards();
+        ui_menu_aviso("Capas digitais recarregadas");
+        ui_som_tocar(UI_SOM_TROCA);
         return MENU_ACAO_NENHUMA;
     }
 
@@ -1042,8 +1090,17 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     case FOCO_CARROSSEL:
         if (tecla == SDLK_LEFT) { mover_carousel_esquerda(); if(carousel_total_visiveis()>1) ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if (tecla == SDLK_RIGHT) { mover_carousel_direita(); if(carousel_total_visiveis()>1) ui_som_tocar(UI_SOM_NAVEGACAO); }
-        else if (tecla == SDLK_UP) foco = FOCO_CABECALHO;
-        else if (tecla == SDLK_DOWN) foco = FOCO_CARROSSEL;
+        else if (tecla == SDLK_UP) {
+            if(ui_game_view_get()==GAME_VIEW_CARD &&
+               ui_card_layout_get()==CARD_LAYOUT_GRID &&
+               carousel_mover_grade_vertical(-1)) ui_som_tocar(UI_SOM_NAVEGACAO);
+            else foco = FOCO_CABECALHO;
+        }
+        else if (tecla == SDLK_DOWN) {
+            if(ui_game_view_get()==GAME_VIEW_CARD &&
+               ui_card_layout_get()==CARD_LAYOUT_GRID &&
+               carousel_mover_grade_vertical(+1)) ui_som_tocar(UI_SOM_NAVEGACAO);
+        }
         else if (tecla_confirmar(tecla)) {
             if (total_visiveis > 0 && carousel_total_visiveis() > 0)
                 return MENU_ACAO_INICIAR_JOGO;
