@@ -102,11 +102,16 @@ static char pacote_usuario_selecionado[TAM_PACOTE] = "";
 /* Aparencia dos icones dos consoles, independente do pacote da sidebar. */
 static int tela_estilo_consoles = 0;
 static int opcao_estilo_consoles = 0;
+/* Submenu proprio para escolher formato e quantidade de cards digitais. */
+static int tela_visualizacao = 0;
+static int opcao_visualizacao = 0;
 static char pacote_consoles[TAM_PACOTE] = "";
 static char pacotes_consoles[MAX_PACOTES_USUARIO][TAM_PACOTE];
 static int total_pacotes_consoles = 0;
-#define TOTAL_OPCOES_APARENCIA 10
-#define ALTURA_MODAL_APARENCIA 583
+#define TOTAL_OPCOES_APARENCIA 7
+#define TOTAL_OPCOES_LATERAL 6
+#define TOTAL_OPCOES_CONSOLES 4
+#define TOTAL_OPCOES_VISUALIZACAO 6
 static int tela_previa_wallpaper = 0;
 static int preview_indice = 0;
 static SDL_Texture *preview_textura = NULL;
@@ -850,36 +855,43 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT)
             tela_estilo_lateral=0;
         else if(tecla==SDLK_UP) {
-            opcao_estilo_lateral=(opcao_estilo_lateral+4)%5;
+            opcao_estilo_lateral=(opcao_estilo_lateral+TOTAL_OPCOES_LATERAL-1)%TOTAL_OPCOES_LATERAL;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla==SDLK_DOWN) {
-            opcao_estilo_lateral=(opcao_estilo_lateral+1)%5;
+            opcao_estilo_lateral=(opcao_estilo_lateral+1)%TOTAL_OPCOES_LATERAL;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if(opcao_estilo_lateral!=4) ui_som_tocar(UI_SOM_TROCA);
+            if(opcao_estilo_lateral!=TOTAL_OPCOES_LATERAL-1)
+                ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_estilo_lateral) {
-            case 0:
+            case 0: /* Modo automatico ou preset manual dos icones oficiais. */
+                contraste_automatico=!contraste_automatico;
+                carregar_icones_preset();
+                carregar_setas_preset();
+                break;
+            case 1:
+                if(contraste_automatico) {
+                    manual_preset=auto_preset;
+                    contraste_automatico=0;
+                } else manual_preset=(Preset)((manual_preset+1)%3);
+                carregar_icones_preset();
+                carregar_setas_preset();
+                break;
+            case 2: /* Pacote local substitui apenas os icones da sidebar. */
                 if(total_pacotes_usuario>0) {
                     proximo_pacote_usuario();
                     carregar_icones_preset();
-                } else ui_menu_aviso("Adicione um pacote completo em ui/styles/");
-                break;
-            case 1:
-                sidebar_pilula=!sidebar_pilula;
-                break;
-            case 2:
-                consoles_cabecalho_visivel=!consoles_cabecalho_visivel;
-                if(!consoles_cabecalho_visivel && foco==FOCO_CABECALHO)
-                    foco=FOCO_CARROSSEL;
+                } else ui_menu_aviso("Adicione um pacote em ui/styles/");
                 break;
             case 3:
-                escanear_pacotes_usuario();
-                carregar_icones_preset();
-                ui_menu_aviso("Lista de estilos atualizada");
+                sidebar_pilula=!sidebar_pilula;
                 break;
             case 4:
-                tela_estilo_lateral=0;
+                escanear_pacotes_usuario();
+                carregar_icones_preset();
+                ui_menu_aviso("Pacotes da barra atualizados");
                 break;
+            case 5: tela_estilo_lateral=0; break;
             }
             salvar_config();
         }
@@ -889,26 +901,73 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) {
             tela_estilo_consoles=0;
         } else if(tecla==SDLK_UP) {
-            opcao_estilo_consoles=(opcao_estilo_consoles+2)%3;
+            opcao_estilo_consoles=(opcao_estilo_consoles+TOTAL_OPCOES_CONSOLES-1)%TOTAL_OPCOES_CONSOLES;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla==SDLK_DOWN) {
-            opcao_estilo_consoles=(opcao_estilo_consoles+1)%3;
+            opcao_estilo_consoles=(opcao_estilo_consoles+1)%TOTAL_OPCOES_CONSOLES;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if(opcao_estilo_consoles!=2) ui_som_tocar(UI_SOM_TROCA);
+            if(opcao_estilo_consoles!=TOTAL_OPCOES_CONSOLES-1)
+                ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_estilo_consoles) {
             case 0:
                 if(total_pacotes_consoles>0) {
                     proximo_pacote_consoles();
                     recarregar_icones_consoles();
-                } else ui_menu_aviso("Copie icones em ui/consoles/styles/");
+                } else ui_menu_aviso("Adicione icones em ui/consoles/styles/");
                 break;
             case 1:
+                consoles_cabecalho_visivel=!consoles_cabecalho_visivel;
+                if(!consoles_cabecalho_visivel && foco==FOCO_CABECALHO)
+                    foco=FOCO_CARROSSEL;
+                break;
+            case 2:
                 escanear_pacotes_consoles();
                 recarregar_icones_consoles();
                 ui_menu_aviso("Pacotes de consoles atualizados");
                 break;
-            case 2: tela_estilo_consoles=0; break;
+            case 3: tela_estilo_consoles=0; break;
+            }
+            salvar_config();
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+    if (tela_visualizacao) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT)
+            tela_visualizacao=0;
+        else if(tecla==SDLK_UP) {
+            opcao_visualizacao=(opcao_visualizacao+TOTAL_OPCOES_VISUALIZACAO-1)%TOTAL_OPCOES_VISUALIZACAO;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_visualizacao=(opcao_visualizacao+1)%TOTAL_OPCOES_VISUALIZACAO;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_visualizacao!=TOTAL_OPCOES_VISUALIZACAO-1)
+                ui_som_tocar(UI_SOM_TROCA);
+            switch(opcao_visualizacao) {
+            case 0:
+                ui_game_view_set(ui_game_view_get()==GAME_VIEW_CARTRIDGE
+                                  ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
+                if(ui_game_view_get()==GAME_VIEW_CARD)
+                    carousel_recarregar_cards();
+                break;
+            case 1: case 2: case 3: {
+                /* Selecionar o layout digital ja abre Cards, sem tocar nos
+                   desenhos ou animacoes de cartuchos fisicos. */
+                CardLayout proximo=opcao_visualizacao==1?CARD_LAYOUT_3:
+                                  opcao_visualizacao==2?CARD_LAYOUT_5:CARD_LAYOUT_GRID;
+                ui_card_layout_set(proximo);
+                if(ui_game_view_get()!=GAME_VIEW_CARD) {
+                    ui_game_view_set(GAME_VIEW_CARD);
+                    carousel_recarregar_cards();
+                }
+                break;
+            }
+            case 4:
+                carousel_recarregar_cards();
+                ui_menu_aviso("Capas digitais recarregadas");
+                break;
+            case 5: tela_visualizacao=0; break;
             }
             salvar_config();
         }
@@ -916,33 +975,33 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     }
     if (tela_aparencia) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
-        else if(tecla==SDLK_UP) { opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
-        else if(tecla==SDLK_DOWN) { opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
-        else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if (opcao_aparencia != 9) ui_som_tocar(UI_SOM_TROCA);
+        else if(tecla==SDLK_UP) {
+            opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_aparencia!=TOTAL_OPCOES_APARENCIA-1) ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_aparencia) {
             case 0:
-                contraste_automatico=!contraste_automatico;
+                escanear_pacotes_usuario();
+                tela_estilo_lateral=1;
+                opcao_estilo_lateral=0;
                 break;
             case 1:
-                if(contraste_automatico) {
-                    manual_preset=auto_preset;
-                    contraste_automatico=0;
-                } else manual_preset=(Preset)((manual_preset+1)%3);
+                escanear_pacotes_consoles();
+                tela_estilo_consoles=1;
+                opcao_estilo_consoles=0;
                 break;
             case 2:
-                modo_texto=(ModoTexto)((modo_texto+1)%3);
+                tela_visualizacao=1;
+                opcao_visualizacao=0;
                 break;
             case 3:
-                ui_game_view_set(ui_game_view_get()==GAME_VIEW_CARTRIDGE
-                                  ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
-                if(ui_game_view_get()==GAME_VIEW_CARD)
-                    carousel_recarregar_cards();
+                modo_texto=(ModoTexto)((modo_texto+1)%3);
                 break;
             case 4:
-                ui_card_layout_set((CardLayout)((ui_card_layout_get()+1)%3));
-                break;
-            case 5:
                 listar_wallpapers();
                 preview_indice=wallpaper_indice;
                 preview_custom_path[0]='\0';
@@ -952,25 +1011,9 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 if(total_wallpapers) tela_previa_wallpaper=1;
                 else ui_menu_aviso("Nenhum wallpaper disponivel");
                 break;
-            case 6:
-                atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1);
-                break;
-            case 7:
-                escanear_pacotes_usuario();
-                tela_estilo_lateral=1;
-                opcao_estilo_lateral=0;
-                break;
-            case 8:
-                escanear_pacotes_consoles();
-                tela_estilo_consoles=1;
-                opcao_estilo_consoles=0;
-                break;
-            case 9:
-                tela_aparencia=0;
-                break;
+            case 5: atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1); break;
+            case 6: tela_aparencia=0; break;
             }
-            carregar_icones_preset();
-            carregar_setas_preset();
             salvar_config();
         }
         return MENU_ACAO_NENHUMA;
@@ -1197,7 +1240,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
 void ui_menu_rolagem(int direcao) {
     if(ui_cards_editando() || tela_previa_wallpaper ||
        tela_aparencia || tela_configuracoes || tela_estilo_lateral ||
-       tela_estilo_consoles || !direcao) return;
+       tela_estilo_consoles || tela_visualizacao || !direcao) return;
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
