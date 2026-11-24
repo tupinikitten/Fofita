@@ -275,6 +275,16 @@ void carousel_recarregar_cards(void) {
 }
 
 
+/* A contagem nao inclui etiquetas fisicas utilizadas como fallback. */
+size_t carousel_contar_cards_exclusivos(void) {
+    size_t quantidade=0;
+    for(size_t i=0;i<total_jogos;++i) {
+        if(console_filtro && jogos[i].sistema!=console_filtro) continue;
+        if(jogos[i].arte_card) ++quantidade;
+    }
+    return quantidade;
+}
+
 size_t carousel_posicao_atual(void) { return foco_atual; }
 
 int carousel_nome_jogo_atual(char *saida, size_t capacidade) {
