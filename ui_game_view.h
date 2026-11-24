@@ -10,4 +10,13 @@ typedef enum {
 void ui_game_view_set(GameViewMode mode);
 GameViewMode ui_game_view_get(void);
 
+/* Opcao separada, aplicada SOMENTE ao modo digital (nao aos cartuchos). */
+typedef enum {
+    CARD_LAYOUT_3 = 0,
+    CARD_LAYOUT_5 = 1,
+    CARD_LAYOUT_GRID = 2
+} CardLayout;
+void ui_card_layout_set(CardLayout layout);
+CardLayout ui_card_layout_get(void);
+
 #endif
