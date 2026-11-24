@@ -1600,16 +1600,17 @@ void ui_menu_desenhar(void) {
         }
         ui_texto_desenhar_centro("<  PREVIA DO WALLPAPER  >",vw/2,caixa.y+258,1,(SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0});
         ui_texto_desenhar_centro("ENTER Aplicar   ESC Cancelar",vw/2,caixa.y+284,1,(SDL_Color){220,225,235,255},(SDL_Color){0,0,0,0});
-    } else if(tela_configuracoes || tela_aparencia) {
-        const int custom=tela_aparencia;
-        const int n=custom?TOTAL_OPCOES_APARENCIA:2;
+    } else if(tela_configuracoes || tela_aparencia || tela_estilo_lateral) {
+        const int sub=tela_estilo_lateral;
+        const int custom=tela_aparencia && !sub;
+        const int n=sub?5:(custom?TOTAL_OPCOES_APARENCIA:2);
         const int claro=preset_ativo()!=PRESET_LIGHT;
         SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
         SDL_Color fundo=claro?(SDL_Color){236,246,255,255}:(SDL_Color){22,35,72,255};
         SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
-        int pw=custom?360:340;
+        int pw=sub?440:(custom?360:340);
         if(pw>vw-42) pw=vw-42;
-        int ph=custom?ALTURA_MODAL_APARENCIA:178;
+        int ph=sub?334:(custom?ALTURA_MODAL_APARENCIA:178);
         if(ph>vh-46) ph=vh-46;
         /* Modal centralizado com veu de fundo; nao depende da lateral. */
         SDL_Rect painel={(vw-pw)/2,(vh-ph)/2,pw,ph};
@@ -1618,12 +1619,36 @@ void ui_menu_desenhar(void) {
                     (SDL_Color){10,24,46,35},0);
         arredondado(painel,25,fundo,0);
         arredondado(painel,25,borda,1);
-        ui_texto_desenhar(custom?"APARÊNCIA":"CONFIGURAÇÕES",painel.x+20,
+        ui_texto_desenhar(sub?"BARRA LATERAL":custom?"APARÊNCIA":"CONFIGURAÇÕES",painel.x+20,
                           painel.y+17,2,tinta,(SDL_Color){0,0,0,0});
-        int altura_linha=custom?50:45;
+        int altura_linha=(custom||sub)?50:45;
         for(int i=0;i<n;++i) {
             char nome[150];
-            if(custom) {
+            if(sub) {
+                switch(i) {
+                case 0:
+                    if(pacote_usuario_selecionado[0])
+                        snprintf(nome,sizeof(nome),"Pacote de icones: %s",
+                                 pacote_usuario_selecionado);
+                    else
+                        snprintf(nome,sizeof(nome),"Pacote: Padrao (%s)",
+                                 nomes_presets[preset_ativo()]);
+                    break;
+                case 1:
+                    snprintf(nome,sizeof(nome),"Fundo lateral: %s",
+                             sidebar_pilula?"Pilula":"Somente icones");
+                    break;
+                case 2:
+                    snprintf(nome,sizeof(nome),"Consoles no topo: %s",
+                             consoles_cabecalho_visivel?"Mostrar":"Ocultar");
+                    break;
+                case 3:
+                    snprintf(nome,sizeof(nome),"Atualizar pacotes (%d)",
+                             total_pacotes_usuario);
+                    break;
+                default: snprintf(nome,sizeof(nome),"Voltar");
+                }
+            } else if(custom) {
                 switch(i) {
                 case 0:
                     snprintf(nome,sizeof(nome),"Icones: %s (%s)",
@@ -1646,13 +1671,15 @@ void ui_menu_desenhar(void) {
                     break;
                 case 4: snprintf(nome,sizeof(nome),"Escolher wallpaper"); break;
                 case 5: snprintf(nome,sizeof(nome),"Restaurar wallpaper padrão"); break;
+                case 6: snprintf(nome,sizeof(nome),"Personalizar barra lateral"); break;
                 default: snprintf(nome,sizeof(nome),"Voltar");
                 }
             } else {
                 snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":"Voltar");
             }
             SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,painel.w-22,altura_linha-6};
-            if((custom?opcao_aparencia:opcao_configuracoes)==i) {
+            if((sub?opcao_estilo_lateral:
+                custom?opcao_aparencia:opcao_configuracoes)==i) {
                 /* Sem camada escura atras da legenda selecionada. */
                 SDL_Color borda_ativa=preset_ativo()==PRESET_COLORFUL
                     ? (SDL_Color){0xC8,0x46,0x82,235}
@@ -1660,7 +1687,11 @@ void ui_menu_desenhar(void) {
                             : (SDL_Color){207,220,255,230};
                 contorno_selecao(linha,14,borda_ativa);
             }
-            ui_texto_desenhar(nome,linha.x+11,linha.y+10,1,tinta,(SDL_Color){0,0,0,0});
+            char nome_ajustado[150];
+            ui_texto_ajustar(nome,linha.w-22,1,
+                             nome_ajustado,sizeof(nome_ajustado));
+            ui_texto_desenhar(nome_ajustado,linha.x+11,linha.y+10,1,
+                              tinta,(SDL_Color){0,0,0,0});
         }
 
     }
