@@ -464,6 +464,74 @@ static void proximo_pacote_usuario(void) {
                   sizeof(pacote_usuario_selecionado),"%s",
                   pacotes_usuario[atual-1]);
 }
+/* Pacotes opcionais do cabecalho:  ui/consoles/styles/<pacote>/<id>_icon.png.
+   Um pacote pode conter apenas alguns sistemas: o resto usa o icone oficial. */
+static int pacote_contem_icone_console(const char *nome) {
+    size_t quantidade=0;
+    const ConsoleConfig *todos=console_registry_get_all(&quantidade);
+    for(size_t i=0;i<quantidade;++i) {
+        char caminho[256];
+        int n=snprintf(caminho,sizeof(caminho),
+            "ui/consoles/styles/%s/%s_icon.png",nome,todos[i].id);
+        if(n<=0 || (size_t)n>=sizeof(caminho)) continue;
+        FILE *arquivo=fopen(caminho,"rb");
+        if(arquivo) { fclose(arquivo); return 1; }
+    }
+    return 0;
+}
+static void escanear_pacotes_consoles(void) {
+    total_pacotes_consoles=0;
+    DIR *dir=opendir("ui/consoles/styles");
+    if(dir) {
+        struct dirent *entrada;
+        while((entrada=readdir(dir))!=NULL &&
+              total_pacotes_consoles<MAX_PACOTES_USUARIO) {
+            if(!nome_pacote_valido(entrada->d_name) ||
+               !pacote_contem_icone_console(entrada->d_name)) continue;
+            snprintf(pacotes_consoles[total_pacotes_consoles++],
+                     TAM_PACOTE,"%s",entrada->d_name);
+        }
+        closedir(dir);
+    }
+    qsort(pacotes_consoles,(size_t)total_pacotes_consoles,
+          sizeof(pacotes_consoles[0]),ordenar_pacotes);
+    if(pacote_consoles[0]) {
+        int achou=0;
+        for(int i=0;i<total_pacotes_consoles;++i)
+            if(!strcmp(pacote_consoles,pacotes_consoles[i])) achou=1;
+        if(!achou) pacote_consoles[0]='\0';
+    }
+}
+static void proximo_pacote_consoles(void) {
+    int atual=0;
+    for(int i=0;i<total_pacotes_consoles;++i)
+        if(!strcmp(pacote_consoles,pacotes_consoles[i])) atual=i+1;
+    atual=(atual+1)%(total_pacotes_consoles+1);
+    if(atual==0) pacote_consoles[0]='\0';
+    else snprintf(pacote_consoles,sizeof(pacote_consoles),
+                  "%s",pacotes_consoles[atual-1]);
+}
+static void recarregar_icones_consoles(void) {
+    for(int i=0;i<total_itens;++i) {
+        ItemConsole *item=&itens[i];
+        SDL_Texture *nova=NULL;
+        int w=0,h=0;
+        if(pacote_consoles[0]) {
+            char caminho[256];
+            int n=snprintf(caminho,sizeof(caminho),
+                  "ui/consoles/styles/%s/%s_icon.png",
+                  pacote_consoles,item->cfg->id);
+            if(n>0 && (size_t)n<sizeof(caminho))
+                nova=carregar_textura(caminho,&w,&h);
+        }
+        if(!nova && item->cfg->caminho_icone)
+            nova=carregar_textura(item->cfg->caminho_icone,&w,&h);
+        if(item->icone) SDL_DestroyTexture(item->icone);
+        item->icone=nova;
+        item->icone_w=w;
+        item->icone_h=h;
+    }
+}
 /* Pacotes pessoais preservam as cores RGB de seus proprios PNGs.
    Os tres presets canonicos continuam com seu carregamento original. */
 static void carregar_icones_preset(void) {
@@ -674,6 +742,7 @@ int ui_menu_init(void) {
 
     carregar_config();
     escanear_pacotes_usuario();
+    escanear_pacotes_consoles();
     listar_wallpapers();
     atualizar_wallpaper(wallpaper_path,0);
 
@@ -687,9 +756,8 @@ int ui_menu_init(void) {
         memset(item, 0, sizeof(*item));
         item->cfg = &todos[i];
 
-        if (todos[i].caminho_icone)
-            item->icone = carregar_textura(todos[i].caminho_icone, &item->icone_w, &item->icone_h);
     }
+    recarregar_icones_consoles();
 
     reconstruir_visiveis(NULL);
     aplicar_selecao();
