@@ -323,23 +323,37 @@ static SDL_Color icone_cor(int indice) {
     return p==PRESET_LIGHT ? (SDL_Color){248,249,255,255}
                            : (SDL_Color){33,45,66,255};
 }
-/* Cada preset usa imagens canonicas com sufixo de tema.
-   Pre-filtragem por media de area para os PNGs 512x512:
-   reduzimos para ate 64px no carregamento, preservando a silhueta e
-   a transparencia antes da reducao final (~64 -> 29) com filtro linear.
-   Executado somente ao trocar o preset, nunca a cada frame. */
-static SDL_Texture *icone_textura_suavizada(const char *caminho,
-                                          const SDL_Color *tingir) {
+/* Media de area para icones de diferentes tamanhos. PNGs oficiais antigos
+   e novas artes (template 512x512) recebem o mesmo tratamento. A operacao
+   ocorre apenas ao carregar/atualizar os icones, nunca a cada frame. */
+static SDL_Texture *icone_textura_preparada(const char *caminho,
+                                           const SDL_Color *tingir,
+                                           int max_w,int max_h,
+                                           int *saida_w,int *saida_h) {
+    if(saida_w) *saida_w=0;
+    if(saida_h) *saida_h=0;
     SDL_Surface *orig=IMG_Load(caminho);
     if(!orig) return NULL;
     SDL_Surface *src=SDL_ConvertSurfaceFormat(orig,SDL_PIXELFORMAT_RGBA32,0);
     SDL_FreeSurface(orig);
     if(!src) return NULL;
 
-    /* Area-average 512->64 preserva tracos finos melhor do que 512->128->29. */
-    int tw=src->w>64?64:src->w;
-    int th=src->h>64?64:src->h;
-    if(tw<=0 || th<=0) { SDL_FreeSurface(src); return NULL; }
+    if(src->w<=0 || src->h<=0 || max_w<=0 || max_h<=0) {
+        SDL_FreeSurface(src);
+        return NULL;
+    }
+    /* Reduz dentro de um limite proporcional, nunca ampliando um arquivo
+       pequeno. Preserva o aspecto mesmo em icones largos, como o NES. */
+    int tw=src->w,th=src->h;
+    if(tw>max_w || th>max_h) {
+        float fator=fminf((float)max_w/tw,(float)max_h/th);
+        tw=(int)(src->w*fator+0.5f);
+        th=(int)(src->h*fator+0.5f);
+        if(tw<1) tw=1;
+        if(th<1) th=1;
+        if(tw>max_w) tw=max_w;
+        if(th>max_h) th=max_h;
+    }
     SDL_Surface *dst=SDL_CreateRGBSurfaceWithFormat(0,tw,th,32,SDL_PIXELFORMAT_RGBA32);
     if(!dst) { SDL_FreeSurface(src); return NULL; }
     if(SDL_MUSTLOCK(src) && SDL_LockSurface(src)!=0) {
@@ -398,11 +412,23 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
 #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(tex,SDL_ScaleModeLinear);
 #endif
+        if(saida_w) *saida_w=tw;
+        if(saida_h) *saida_h=th;
     }
     return tex;
 }
+/* A barra lateral conserva sua textura intermediaria compacta de ate 64px. */
+static SDL_Texture *icone_textura_suavizada(const char *caminho,
+                                           const SDL_Color *tingir) {
+    return icone_textura_preparada(caminho,tingir,64,64,NULL,NULL);
+}
 static SDL_Texture *carregar_icone_tingido(const char *caminho,SDL_Color cor) {
     return icone_textura_suavizada(caminho,&cor);
+}
+/* Consoles: 2x o limite de exibicao (84x54), para filtro linear final.
+   A imagem e reduzida uma vez, sem distorcer a proporcao nem perder alpha. */
+static SDL_Texture *carregar_icone_console(const char *caminho,int *w,int *h) {
+    return icone_textura_preparada(caminho,NULL,168,108,w,h);
 }
 /* Nomes simples, sem barras nem traversal, para selecionar pacotes locais. */
 static int nome_pacote_valido(const char *nome) {
@@ -527,10 +553,10 @@ static void recarregar_icones_consoles(void) {
                   "ui/consoles/styles/%s/%s_icon.png",
                   pacote_consoles,item->cfg->id);
             if(n>0 && (size_t)n<sizeof(caminho))
-                nova=carregar_textura(caminho,&w,&h);
+                nova=carregar_icone_console(caminho,&w,&h);
         }
         if(!nova && item->cfg->caminho_icone)
-            nova=carregar_textura(item->cfg->caminho_icone,&w,&h);
+            nova=carregar_icone_console(item->cfg->caminho_icone,&w,&h);
         if(item->icone) SDL_DestroyTexture(item->icone);
         item->icone=nova;
         item->icone_w=w;
