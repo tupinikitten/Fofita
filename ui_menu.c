@@ -758,7 +758,8 @@ static SDL_Color cor_legenda_local(SDL_Rect regiao, int suave, SDL_Color *sombra
 }
 static int extensao_imagem(const char *nome) {
     const char *p=strrchr(nome,'.');
-    return p && (!SDL_strcasecmp(p,".jpg") || !SDL_strcasecmp(p,".jpeg") || !SDL_strcasecmp(p,".png"));
+    return p && (!SDL_strcasecmp(p,".jpg") || !SDL_strcasecmp(p,".jpeg") ||
+                 !SDL_strcasecmp(p,".png") || !SDL_strcasecmp(p,".gif"));
 }
 static void listar_wallpapers(void) {
     total_wallpapers=0;
@@ -833,15 +834,42 @@ static void avaliar_contraste_wallpaper(void) {
     if(lum>155) auto_preset=PRESET_DARK;
     else if(lum<122) auto_preset=PRESET_LIGHT;
 }
-static void atualizar_wallpaper(const char *caminho,int persistir) {
-    SDL_Texture *novo=IMG_LoadTexture(renderer,caminho);
-    if(!novo) {ui_menu_aviso("Nao foi possivel abrir a imagem");return;}
-    if(wallpaper) SDL_DestroyTexture(wallpaper);
-    wallpaper=novo;
-    if(caminho!=wallpaper_path) snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",caminho);
+/* So troca a textura em uso quando o caminho realmente mudou.
+   Isso evita reiniciar um GIF ao navegar entre consoles que herdam o fundo. */
+static int carregar_wallpaper_exibido(const char *caminho) {
+    if(!caminho || !*caminho) return 0;
+    if(!strcmp(caminho,wallpaper_path) && ui_wallpaper_textura())
+        return 1;
+    if(!ui_wallpaper_carregar(renderer,caminho,wallpapers_animados)) return 0;
+    snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",caminho);
+    /* O contraste usa o primeiro quadro da animacao; nao fica piscando. */
     avaliar_contraste_wallpaper();
     carregar_icones_preset();
     carregar_setas_preset();
+    return 1;
+}
+static void sincronizar_wallpaper_console(void) {
+    const char *caminho=wallpaper_do_console(console_selecionado());
+    if(carregar_wallpaper_exibido(caminho)) return;
+    /* Se o usuario remover o PNG/GIF de um console, ele herda o universal. */
+    if(carregar_wallpaper_exibido(wallpaper_universal)) return;
+    carregar_wallpaper_exibido("ui/wallpapers/bk-01.jpg");
+}
+static void atualizar_wallpaper(const char *caminho,int persistir) {
+    if(!caminho || !*caminho || strlen(caminho)>=sizeof(wallpaper_path)) {
+        ui_menu_aviso("Caminho do wallpaper invalido");
+        return;
+    }
+    /* Validacao antes de salvar; nao precisa manter a superficie na RAM. */
+    SDL_Surface *teste=IMG_Load(caminho);
+    if(!teste) { ui_menu_aviso("Nao foi possivel abrir o wallpaper"); return; }
+    SDL_FreeSurface(teste);
+    const ConsoleConfig *c=console_selecionado();
+    if(wallpaper_escopo_console && c)
+        definir_wallpaper_console(c->id,caminho);
+    else
+        snprintf(wallpaper_universal,sizeof(wallpaper_universal),"%s",caminho);
+    sincronizar_wallpaper_console();
     if(persistir) salvar_config();
 }
 int ui_menu_init(void) {
@@ -854,7 +882,6 @@ int ui_menu_init(void) {
     escanear_pacotes_usuario();
     escanear_pacotes_consoles();
     listar_wallpapers();
-    atualizar_wallpaper(wallpaper_path,0);
 
     size_t quantidade = 0;
     const ConsoleConfig *todos = console_registry_get_all(&quantidade);
@@ -880,7 +907,7 @@ void ui_menu_fechar(void) {
     for (int i = 0; i < total_itens; ++i)
         if (itens[i].icone) SDL_DestroyTexture(itens[i].icone);
 
-    if (wallpaper) SDL_DestroyTexture(wallpaper);
+    ui_wallpaper_fechar();
     if (seta_esq) SDL_DestroyTexture(seta_esq);
     if (seta_dir) SDL_DestroyTexture(seta_dir);
     for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i)
@@ -888,7 +915,7 @@ void ui_menu_fechar(void) {
 
     if(preview_textura) SDL_DestroyTexture(preview_textura);
     preview_textura=NULL;
-    wallpaper = seta_esq = seta_dir = NULL;
+    seta_esq = seta_dir = NULL;
     total_itens = total_visiveis = sel = 0;
     limpar_cache_arredondado();
     ui_texto_fechar();
@@ -1415,7 +1442,7 @@ void ui_menu_rolagem(int direcao) {
 /* Arrastar uma imagem para a janela abre a previa, sem modificar preferencias ate confirmar. */
 void ui_menu_wallpaper_solto(const char *caminho) {
     if(!caminho || !*caminho || !extensao_imagem(caminho)) {
-        ui_menu_aviso("Solte um arquivo PNG ou JPG"); return;
+        ui_menu_aviso("Solte um PNG, JPG ou GIF"); return;
     }
     SDL_Texture *tex=IMG_LoadTexture(renderer,caminho);
     if(!tex) {ui_menu_aviso("Imagem invalida");return;}
@@ -1578,6 +1605,7 @@ void ui_menu_controle_conectado(int sim) { (void)sim; }
 static void desenhar_fundo(int vw, int vh) {
     const UiTema *tema = ui_tema_atual();
 
+    SDL_Texture *wallpaper=ui_wallpaper_textura();
     if (!wallpaper) {
         preencher((SDL_Rect){ 0, 0, vw, vh }, tema->cor_fundo);
         return;
