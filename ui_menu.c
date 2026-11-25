@@ -5,6 +5,7 @@
 #include "ui_game_view.h"
 #include "ui_cards.h"
 #include "video_audio.h"
+#include "ui_wallpaper.h"
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <string.h>
@@ -60,7 +61,7 @@ static int sel = 0;   /* posicao dentro de 'visiveis' */
 static char ocultos[MAX_OCULTOS][TAM_ID];
 static int total_ocultos = 0;
 
-static SDL_Texture *wallpaper = NULL;
+/* A textura, inclusive os quadros de GIF, pertence a ui_wallpaper.c. */
 /* Apenas um mapa pequeno de brilho: nao manter a imagem completa na RAM. */
 #define MAPA_BRILHO_W 96
 #define MAPA_BRILHO_H 54
@@ -82,7 +83,20 @@ static int contraste_automatico = 1;
 typedef enum { TEXTO_AUTOMATICO, TEXTO_LIGHT, TEXTO_DARK } ModoTexto;
 static ModoTexto modo_texto = TEXTO_AUTOMATICO;
 static const char *const nomes_modos_texto[] = {"Automatico", "Light", "Dark"};
-static char wallpaper_path[512] = "ui/wallpapers/bk-01.jpg";
+static char wallpaper_path[512] = "ui/wallpapers/bk-01.jpg"; /* exibido */
+static char wallpaper_universal[512] = "ui/wallpapers/bk-01.jpg";
+typedef struct {
+    char console[TAM_ID];
+    char caminho[512];
+} WallpaperConsole;
+static WallpaperConsole wallpapers_console[MAX_ITENS];
+static int total_wallpapers_console = 0;
+/* 0: alterar o wallpaper universal; 1: alterar somente o console em foco. */
+static int wallpaper_escopo_console = 0;
+static int wallpapers_animados = 1;
+static int tela_wallpapers = 0;
+static int opcao_wallpapers = 0;
+#define TOTAL_OPCOES_WALLPAPERS 5
 #define MAX_WALLPAPERS 64
 static char wallpapers[MAX_WALLPAPERS][512];
 static int total_wallpapers = 0;
@@ -108,7 +122,7 @@ static int opcao_visualizacao = 0;
 static char pacote_consoles[TAM_PACOTE] = "";
 static char pacotes_consoles[MAX_PACOTES_USUARIO][TAM_PACOTE];
 static int total_pacotes_consoles = 0;
-#define TOTAL_OPCOES_APARENCIA 7
+#define TOTAL_OPCOES_APARENCIA 6
 #define TOTAL_OPCOES_LATERAL 6
 #define TOTAL_OPCOES_CONSOLES 4
 #define TOTAL_OPCOES_VISUALIZACAO 6
@@ -175,13 +189,30 @@ static void carregar_config(void) {
     FILE *f = fopen(ARQUIVO_CONFIG, "r");
     if (!f) return;
 
-    char linha[128];
+    char linha[1200];
     while (fgets(linha, sizeof(linha), f)) {
         linha[strcspn(linha, "\r\n")] = '\0';
         if (strncmp(linha, "oculto=", 7) == 0 && linha[7] != '\0')
             definir_oculto(linha + 7, 1);
         else if (strncmp(linha, "wallpaper=", 10)==0 && linha[10])
-            snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",linha+10);
+            snprintf(wallpaper_universal,sizeof(wallpaper_universal),"%s",linha+10);
+        else if (strncmp(linha, "wallpaper_console=", 18)==0) {
+            const char *valor=linha+18;
+            const char *separador=strchr(valor,'|');
+            if(separador && separador>valor && separador[1]) {
+                char id[TAM_ID];
+                size_t tamanho=(size_t)(separador-valor);
+                if(tamanho<sizeof(id)) {
+                    memcpy(id,valor,tamanho);
+                    id[tamanho]='\0';
+                    definir_wallpaper_console(id,separador+1);
+                }
+            }
+        } else if (strncmp(linha,"wallpaper_scope=",16)==0) {
+            wallpaper_escopo_console=!strcmp(linha+16,"console");
+        } else if (strncmp(linha,"wallpaper_animated=",19)==0) {
+            wallpapers_animados=atoi(linha+19)!=0;
+        }
         else if (strncmp(linha,"icon_auto=",10)==0)
             contraste_automatico = atoi(linha+10)!=0;
         else if (strncmp(linha,"icon_manual=",12)==0) {
@@ -223,7 +254,13 @@ static void salvar_config(void) {
     for (int i = 0; i < total_ocultos; ++i)
         fprintf(f, "oculto=%s\n", ocultos[i]);
     fprintf(f,"wallpaper=%s\nicon_auto=%d\nicon_manual=%d\n",
-            wallpaper_path,contraste_automatico,(int)manual_preset);
+            wallpaper_universal,contraste_automatico,(int)manual_preset);
+    fprintf(f,"wallpaper_scope=%s\nwallpaper_animated=%d\n",
+            wallpaper_escopo_console?"console":"universal",wallpapers_animados);
+    for(int i=0;i<total_wallpapers_console;++i)
+        fprintf(f,"wallpaper_console=%s|%s\n",
+                wallpapers_console[i].console,
+                wallpapers_console[i].caminho);
     fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
     fprintf(f,"card_layout=%s\n",
             ui_card_layout_get()==CARD_LAYOUT_GRID?"grid":
