@@ -185,6 +185,47 @@ static void definir_oculto(const char *id, int ocultar) {
     }
 }
 
+static int carregar_wallpaper_exibido(const char *caminho);
+static void sincronizar_wallpaper_console(void);
+
+static int indice_wallpaper_console(const char *id) {
+    if(!id || !*id) return -1;
+    for(int i=0;i<total_wallpapers_console;++i)
+        if(!strcmp(wallpapers_console[i].console,id)) return i;
+    return -1;
+}
+/* Salva caminhos por ID do console, independente da ordem do cabecalho. */
+static void definir_wallpaper_console(const char *id,const char *caminho) {
+    if(!id || !*id) return;
+    int i=indice_wallpaper_console(id);
+    if(!caminho || !*caminho) {
+        if(i>=0) {
+            memmove(&wallpapers_console[i],&wallpapers_console[i+1],
+                    (size_t)(total_wallpapers_console-i-1)*sizeof(wallpapers_console[0]));
+            --total_wallpapers_console;
+        }
+        return;
+    }
+    size_t n=strlen(caminho);
+    if(n>=sizeof(wallpapers_console[0].caminho)) return;
+    if(i<0) {
+        if(total_wallpapers_console>=MAX_ITENS) return;
+        i=total_wallpapers_console++;
+    }
+    snprintf(wallpapers_console[i].console,
+             sizeof(wallpapers_console[i].console),"%s",id);
+    snprintf(wallpapers_console[i].caminho,
+             sizeof(wallpapers_console[i].caminho),"%s",caminho);
+}
+static const char *wallpaper_do_console(const ConsoleConfig *c) {
+    if(c) {
+        int i=indice_wallpaper_console(c->id);
+        if(i>=0 && wallpapers_console[i].caminho[0])
+            return wallpapers_console[i].caminho;
+    }
+    return wallpaper_universal;
+}
+
 static void carregar_config(void) {
     FILE *f = fopen(ARQUIVO_CONFIG, "r");
     if (!f) return;
@@ -283,6 +324,7 @@ static const ConsoleConfig *console_selecionado(void) {
 
 static void aplicar_selecao(void) {
     carousel_definir_console(console_selecionado());
+    sincronizar_wallpaper_console();
 }
 
 static void reconstruir_visiveis(const ConsoleConfig *manter) {
