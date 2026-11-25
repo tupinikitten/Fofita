@@ -84,6 +84,7 @@ void ui_som_tocar(UiSom som) {
 
 int formato_de_cor = SDL_PIXELFORMAT_RGB555;
 float proporcao_video = 0.0f;
+int video_escala = 0, video_filtro = 0, video_proporcao = 0;
 
 static int modo_menu_ativo = 0;
 
@@ -192,7 +193,7 @@ void retro_video_refresh_cb(const void *data, unsigned width, unsigned height, s
             /* Game textures use nearest-neighbor scaling independently of the
                linear filtering used by PNGs and other interface assets. */
 #if SDL_VERSION_ATLEAST(2, 0, 12)
-            if (SDL_SetTextureScaleMode(textura_jogo, SDL_ScaleModeNearest) != 0)
+            if (SDL_SetTextureScaleMode(textura_jogo, video_filtro ? SDL_ScaleModeLinear : SDL_ScaleModeNearest) != 0)
                 SDL_Log("Nao foi possivel ativar escala nearest: %s", SDL_GetError());
 #endif
         }

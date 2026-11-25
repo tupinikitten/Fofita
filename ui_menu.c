@@ -115,7 +115,7 @@ static char preview_custom_path[1024] = "";
 static int item_lateral = LATERAL_CONFIGURACOES;
 static int tela_configuracoes = 0;
 static int opcao_configuracoes = 0;
-static int total_opcoes_config = 2;
+static int total_opcoes_config = 3;
 
 static Foco foco = FOCO_CARROSSEL;
 /* Visibilidade temporaria da sidebar: nao afeta a geometria do carrossel. */
@@ -202,6 +202,12 @@ static void carregar_config(void) {
             if(!strcmp(valor,"five")) ui_card_layout_set(CARD_LAYOUT_5);
             else if(!strcmp(valor,"grid")) ui_card_layout_set(CARD_LAYOUT_GRID);
             else ui_card_layout_set(CARD_LAYOUT_3);
+        } else if (strncmp(linha,"video_escala=",13)==0) {
+            int v=atoi(linha+13); if(v>=0 && v<=2) video_escala=v;
+        } else if (strncmp(linha,"video_filtro=",13)==0) {
+            int v=atoi(linha+13); if(v>=0 && v<=1) video_filtro=v;
+        } else if (strncmp(linha,"video_proporcao=",16)==0) {
+            int v=atoi(linha+16); if(v>=0 && v<=2) video_proporcao=v;
         } else if (strncmp(linha,"game_view=",10)==0) {
             ui_game_view_set(strcmp(linha+10,"card")==0
                              ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
@@ -219,6 +225,7 @@ static void salvar_config(void) {
         fprintf(f, "oculto=%s\n", ocultos[i]);
     fprintf(f,"wallpaper=%s\nicon_auto=%d\nicon_manual=%d\n",
             wallpaper_path,contraste_automatico,(int)manual_preset);
+    fprintf(f,"video_escala=%d\nvideo_filtro=%d\nvideo_proporcao=%d\n",video_escala,video_filtro,video_proporcao);
     fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
     fprintf(f,"card_layout=%s\n",
             ui_card_layout_get()==CARD_LAYOUT_GRID?"grid":
@@ -976,14 +983,25 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         return MENU_ACAO_NENHUMA;
     }
     if (tela_configuracoes) {
-        if(tecla==SDLK_LEFT) { tela_configuracoes=0; return MENU_ACAO_NENHUMA; }
+        if(tecla==SDLK_LEFT || tecla==SDLK_ESCAPE) { if(tela_configuracoes==2) { tela_configuracoes=1; opcao_configuracoes=1; total_opcoes_config=3; } else tela_configuracoes=0; return MENU_ACAO_NENHUMA; }
         if(tecla==SDLK_UP) { opcao_configuracoes=(opcao_configuracoes+total_opcoes_config-1)%total_opcoes_config; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla==SDLK_DOWN) { opcao_configuracoes=(opcao_configuracoes+1)%total_opcoes_config; ui_som_tocar(UI_SOM_NAVEGACAO); }
         else if(tecla==SDLK_ESCAPE) tela_configuracoes=0;
         else if(tecla_confirmar(tecla)) {
-            switch(opcao_configuracoes) {
+            if(tela_configuracoes==2) {
+                switch(opcao_configuracoes) {
+                case 0: video_proporcao=(video_proporcao+1)%3; break;
+                case 1: video_escala=(video_escala+1)%3; break;
+                case 2: video_filtro=!video_filtro; break;
+                case 3: video_proporcao=video_escala=video_filtro=0; break;
+                case 4: tela_configuracoes=1; opcao_configuracoes=1; total_opcoes_config=3; break;
+                }
+                salvar_config();
+                ui_som_tocar(UI_SOM_TROCA);
+            } else switch(opcao_configuracoes) {
             case 0: mostrar_todos_consoles(); break;
-            case 1: tela_configuracoes=0; break;
+            case 1: tela_configuracoes=2; opcao_configuracoes=0; total_opcoes_config=5; break;
+            case 2: tela_configuracoes=0; break;
             }
         }
         return MENU_ACAO_NENHUMA;
@@ -1131,10 +1149,10 @@ MenuAcao ui_menu_clique(int mx,int my) {
         int sub=tela_estilo_lateral;
         int cons=tela_estilo_consoles;
         int custom=tela_aparencia && !sub && !cons;
-        int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:2));
-        int pw=cons?445:(sub?440:(custom?395:340));
+        int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:total_opcoes_config));
+        int pw=cons?445:(sub?440:(custom?395:(tela_configuracoes==2?445:340)));
         if(pw>vw-42) pw=vw-42;
-        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:178));
+        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:(tela_configuracoes==2?310:223)));
         if(ph>vh-46) ph=vh-46;
         int x=(vw-pw)/2;
         int y=(vh-ph)/2;
@@ -1770,14 +1788,14 @@ void ui_menu_desenhar(void) {
         const int sub=tela_estilo_lateral;
         const int cons=tela_estilo_consoles;
         const int custom=tela_aparencia && !sub && !cons;
-        const int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:2));
+        const int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:total_opcoes_config));
         const int claro=preset_ativo()!=PRESET_LIGHT;
         SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
         SDL_Color fundo=claro?(SDL_Color){236,246,255,255}:(SDL_Color){22,35,72,255};
         SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
-        int pw=cons?445:(sub?440:(custom?395:340));
+        int pw=cons?445:(sub?440:(custom?395:(tela_configuracoes==2?445:340)));
         if(pw>vw-42) pw=vw-42;
-        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:178));
+        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:(tela_configuracoes==2?310:223)));
         if(ph>vh-46) ph=vh-46;
         /* Modal centralizado com veu de fundo; nao depende da lateral. */
         SDL_Rect painel={(vw-pw)/2,(vh-ph)/2,pw,ph};
@@ -1788,7 +1806,7 @@ void ui_menu_desenhar(void) {
         arredondado(painel,25,borda,1);
         ui_texto_desenhar(cons?"ICONES DOS CONSOLES":
                           sub?"BARRA LATERAL":
-                          custom?"APARÊNCIA":"CONFIGURAÇÕES",
+                          custom?"APARÊNCIA":tela_configuracoes==2?"VIDEO":"CONFIGURAÇÕES",
                           painel.x+20,painel.y+17,2,tinta,
                           (SDL_Color){0,0,0,0});
         int altura_linha=(custom||sub||cons)?50:45;
@@ -1863,7 +1881,17 @@ void ui_menu_desenhar(void) {
                 default: snprintf(nome,sizeof(nome),"Voltar");
                 }
             } else {
-                snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":"Voltar");
+                if(tela_configuracoes==2) {
+                    const char *ratios[]={"Original do console","Pixels quadrados","4:3"};
+                    const char *escalas[]={"Automatico","Inteira (Pixel Perfect)","Ajuste livre"};
+                    switch(i) {
+                    case 0: snprintf(nome,sizeof(nome),"Proporcao: %s",ratios[video_proporcao]); break;
+                    case 1: snprintf(nome,sizeof(nome),"Balanceamento: %s",escalas[video_escala]); break;
+                    case 2: snprintf(nome,sizeof(nome),"Filtragem: %s",video_filtro?"Suave":"Nitida"); break;
+                    case 3: snprintf(nome,sizeof(nome),"Restaurar padroes"); break;
+                    default: snprintf(nome,sizeof(nome),"Voltar");
+                    }
+                } else snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":i==1?"Video":"Voltar");
             }
             SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,painel.w-22,altura_linha-6};
             if((cons?opcao_estilo_consoles:
