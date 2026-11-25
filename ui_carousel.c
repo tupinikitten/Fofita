@@ -275,6 +275,16 @@ void carousel_recarregar_cards(void) {
 }
 
 
+/* A contagem nao inclui etiquetas fisicas utilizadas como fallback. */
+size_t carousel_contar_cards_exclusivos(void) {
+    size_t quantidade=0;
+    for(size_t i=0;i<total_jogos;++i) {
+        if(console_filtro && jogos[i].sistema!=console_filtro) continue;
+        if(jogos[i].arte_card) ++quantidade;
+    }
+    return quantidade;
+}
+
 size_t carousel_posicao_atual(void) { return foco_atual; }
 
 int carousel_nome_jogo_atual(char *saida, size_t capacidade) {
@@ -300,15 +310,6 @@ const char *obter_caminho_jogo_atual(void) {
 
 static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
     /* Mesma selecao e mesma lista de jogos: somente troca o renderizador. */
-    if(ui_game_view_get()==GAME_VIEW_CARD) {
-        ui_cards_desenhar(renderer,
-                          jogos[index].arte_card ? jogos[index].arte_card
-                                                 : jogos[index].arte_capa,
-                          jogos[index].nome_arquivo,
-                          jogos[index].caminho_completo_rom,
-                          pos_molde,intensidade,intensidade==255);
-        return;
-    }
     const ConsoleConfig *sis = jogos[index].sistema;
     SDL_Texture *molde = NULL;
 
@@ -319,6 +320,15 @@ static void desenhar_jogo(size_t index, SDL_Rect pos_molde, int intensidade) {
         }
     }
 
+    if(ui_game_view_get()==GAME_VIEW_CARD || !molde) {
+        ui_cards_desenhar(renderer,
+                          jogos[index].arte_card ? jogos[index].arte_card
+                                                 : jogos[index].arte_capa,
+                          jogos[index].nome_arquivo,
+                          jogos[index].caminho_completo_rom,
+                          pos_molde,intensidade,intensidade==255);
+        return;
+    }
     /* Tamanho de referencia do molde: o do PNG carregado (real). O valor do
        registro so e usado se nao houver textura, assim um molde_w/molde_h
        errado no registro nao desloca mais a etiqueta. */

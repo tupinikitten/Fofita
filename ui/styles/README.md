@@ -8,7 +8,7 @@ Os seis icones laterais possuem nomes canonicos, com um arquivo por preset:
 | Configuracoes | `light/icons/settings_icon_light.png` | `dark/icons/settings_icon_dark.png` | `colorful/icons/settings_icon_colorful.png` |
 | Filtros | `light/icons/filter_icon_light.png` | `dark/icons/filter_icon_dark.png` | `colorful/icons/filter_icon_colorful.png` |
 | Favoritos | `light/icons/heart_icon_light.png` | `dark/icons/heart_icon_dark.png` | `colorful/icons/heart_icon_colorful.png` |
-| Aparencia | `light/icons/bucket_icon_light.png` | `dark/icons/bucket_icon_dark.png` | `colorful/icons/bucket_icon_colorful.png` |
+| Customizacao | `light/icons/bucket_icon_light.png` | `dark/icons/bucket_icon_dark.png` | `colorful/icons/bucket_icon_colorful.png` |
 | Sair | `light/icons/out_icon_light.png` | `dark/icons/out_icon_dark.png` | `colorful/icons/out_icon_colorful.png` |
 
 **Light** identifica os icones claros, para wallpapers escuros.
@@ -16,7 +16,7 @@ Os seis icones laterais possuem nomes canonicos, com um arquivo por preset:
 **Colorful** preserva as cores individuais dos PNGs.
 
 O contraste automatico escolhe entre Light e Dark ao analisar o wallpaper.
-Aparencia permite desativar o contraste automatico e selecionar um preset manual.
+Customizacao permite desativar o contraste automatico e selecionar um preset manual.
 
 Os PNGs da pasta Dark que nao tinham versao com sufixo (trophy, heart e out)
 foram substituidos por copias das silhuetas atuais da pasta Light, para
@@ -28,7 +28,7 @@ As setas continuam em `light/arrows/` e `dark/arrows/`, com nomes
 conforme o wallpaper.
 
 **Nao utilizar nomes legados** como `trophy_icon.png`, `heart_icon.png`
-ou `brush_icon.png`. O balde substitui o pincel no menu Aparencia.
+ou `brush_icon.png`. O balde substitui o pincel no menu Customizacao.
 
 Ao adicionar um preset, manter os seis arquivos no padrao `<nome>_icon_<preset>.png`.
 O empacotamento Windows verifica a presenca desses arquivos e rejeita nomes legados.
@@ -38,7 +38,7 @@ misturar recursos antigos de pacotes previamente extraidos.
 
 ## Pacotes criados pelo usuario
 
-Agora a opcao **Aparencia > Personalizar barra lateral** permite selecionar pacotes proprios. Os presets oficiais Light, Dark e Colorful continuam disponiveis como padrao e com contraste automatico. **Um pacote pessoal substitui apenas os seis icones; nao cria novas acoes na barra.**
+Agora a opcao **Customizacao > Personalizar barra lateral** permite selecionar pacotes proprios. Os presets oficiais Light, Dark e Colorful continuam disponiveis como padrao e com contraste automatico. **Um pacote pessoal substitui apenas os seis icones; nao cria novas acoes na barra.**
 
 Crie uma pasta em `ui/styles/`, com nome de ate 32 caracteres formado por letras sem acentos, numeros, `_` ou `-`. Nao use `light`, `dark` ou `colorful` como nome para um novo pacote.
 
@@ -59,8 +59,13 @@ Recomenda-se **PNG transparente 512 x 512**, mantendo margens visuais semelhante
 
 A Fofita procura ate 32 pacotes extras, ordenados alfabeticamente. Depois de copiar uma pasta com o programa aberto, escolha **Atualizar pacotes** no submenu. A escolha e salva em `fofita_menu.cfg`. A opcao **Padrao** retorna aos presets automaticos/manuais originais.
 
-O submenu tambem permite:
-- mostrar a **pilula** translucida ou deixar os **icones soltos** sobre o wallpaper;
-- **mostrar ou ocultar o carrossel de consoles** do topo (sem impedir a troca de console por teclado/controle: foco no cabecalho + esquerda/direita; quando oculto, o nome do console aparece em um aviso breve).
+O menu **Customizacao > Barra lateral** concentra todas as preferencias deste componente:
+- **Icones padrao:** modo Automatico ou Manual (Light/Dark/Colorful);
+- **Preset manual:** seleciona o preset oficial, inativo quando Automatico estiver ligado;
+- **Pacote de icones:** Padrao ou uma pasta personalizada em ui/styles;
+- **Fundo lateral:** Pilula ou Somente icones;
+- **Atualizar pacotes** e **Voltar**.
+
+A visibilidade da faixa superior de consoles foi movida para **Customizacao > Consoles**, junto da escolha dos icones personalizados de consoles. O menu da barra lateral nao altera mais esse controle.
 
 Essas preferencias nao alteram as ROMs, o backend, os cartuchos nem as capas dos cards. Os pacotes de cada usuario podem ficar apenas na pasta local da Fofita; nao e necessario inclui-los no GitHub.

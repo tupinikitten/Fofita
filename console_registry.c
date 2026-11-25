@@ -7,7 +7,7 @@
 EXT_LIST(ext_atari2600, ".a26", ".bin", ".rom");
 EXT_LIST(ext_nes, ".nes", ".unf", ".unif");
 EXT_LIST(ext_snes, ".sfc", ".smc");
-EXT_LIST(ext_gb, ".gb");
+EXT_LIST(ext_gb, ".gb", ".dmg");
 EXT_LIST(ext_gbc, ".gbc");
 EXT_LIST(ext_gba, ".gba");
 EXT_LIST(ext_n64, ".z64", ".n64", ".v64");
@@ -36,8 +36,8 @@ static const ConsoleConfig consoles[] = {
        Os cantos inferiores do rebaixo tem raio ~6 px (medido no template). */
     {"nes", "Nintendo Entertainment System", ext_nes, sizeof(ext_nes)/sizeof(ext_nes[0]), "roms/nes", "labels/nes", "assets/nes/body/cartridge_base.png", 730,835, 298,31,322,520, CAPA_AUTO, 6, "cores/fceumm_libretro.dll", "ui/consoles/nes_icon.png"},
     {"snes", "Super Nintendo", ext_snes, sizeof(ext_snes)/sizeof(ext_snes[0]), "roms/snes", "assets/snes", "templates/snes_template.png", 400,400, 40,100,320,220, CAPA_CONTAIN, 0, NULL, NULL},
-    {"gb", "Game Boy", ext_gb, sizeof(ext_gb)/sizeof(ext_gb[0]), "roms/gb", "assets/gb", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/gb_icon.png"},
-    {"gbc", "Game Boy Color", ext_gbc, sizeof(ext_gbc)/sizeof(ext_gbc[0]), "roms/gbc", "assets/gbc", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/gbc_icon.png"},
+    {"gb", "Game Boy", ext_gb, sizeof(ext_gb)/sizeof(ext_gb[0]), "roms/gb", "assets/gb", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, "cores/gambatte_libretro.dll", "ui/consoles/gb_icon.png"},
+    {"gbc", "Game Boy Color", ext_gbc, sizeof(ext_gbc)/sizeof(ext_gbc[0]), "roms/gbc", "assets/gbc", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, "cores/gambatte_libretro.dll", "ui/consoles/gbc_icon.png"},
     {"gba", "Game Boy Advance", ext_gba, sizeof(ext_gba)/sizeof(ext_gba[0]), "roms/gba", "assets/gba", "templates/gba_template.png", 400,400, 60,120,280,150, CAPA_CONTAIN, 0, NULL, "ui/consoles/gba_icon.png"},
     {"n64", "Nintendo 64", ext_n64, sizeof(ext_n64)/sizeof(ext_n64[0]), "roms/n64", "assets/n64", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL},
     {"nds", "Nintendo DS", ext_ds, sizeof(ext_ds)/sizeof(ext_ds[0]), "roms/nds", "assets/nds", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/ds_icon.png"},

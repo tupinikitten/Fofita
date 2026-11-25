@@ -27,6 +27,11 @@ extern void retro_input_poll_cb(void);
 extern int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id);
 
 bool retro_environment_cb(unsigned cmd, void *data) {
+    if(cmd == RETRO_ENVIRONMENT_GET_CAN_DUPE) {
+        if(!data) return false;
+        *(bool*)data = true;
+        return true;
+    }
     if (cmd == RETRO_ENVIRONMENT_SET_GEOMETRY) {
         const struct retro_game_geometry *geometria =
             (const struct retro_game_geometry *)data;

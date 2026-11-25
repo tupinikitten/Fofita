@@ -51,8 +51,10 @@ jobs:
 
           # Pastas vazias nao sao preservadas pelo Git. Criar pasta de ROMs
           # para testes locais, sem distribuir jogos de terceiros.
-          mkdir -p dist/Fofita/roms/nes
+          mkdir -p dist/Fofita/roms/{nes,gb,gbc}
           printf 'Coloque suas ROMs .nes nesta pasta para testa-las.\n' > dist/Fofita/roms/nes/LEIA-ME.txt
+          printf 'ROMs .gb ou .dmg; instale gambatte_libretro.dll em cores/.\n' > dist/Fofita/roms/gb/LEIA-ME.txt
+          printf 'ROMs .gbc; instale gambatte_libretro.dll em cores/.\n' > dist/Fofita/roms/gbc/LEIA-ME.txt
 
           # Nao publicar arquivos de estilo antigos nem presets incompletos.
           # Os 18 PNGs canonicos sao obrigatorios neste pacote.

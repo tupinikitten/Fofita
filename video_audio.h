@@ -12,7 +12,7 @@ extern SDL_Texture *textura_jogo;
 extern int formato_de_cor;
 extern int video_escala; /* 0 automatico, 1 inteira, 2 ajuste livre */
 extern int video_filtro; /* 0 nitido, 1 suave */
-extern int video_proporcao; /* 0 console, 1 pixels quadrados, 2 4:3 */
+extern int video_proporcao; /* 0 console, 1 pixels quadrados */
 extern float proporcao_video; /* aspect ratio informado pelo core Libretro, se disponivel */
 
 /* Dashboard: layout em coordenadas 1280x720, projetado uniformemente pelo SDL

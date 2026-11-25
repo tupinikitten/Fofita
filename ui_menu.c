@@ -5,6 +5,7 @@
 #include "ui_game_view.h"
 #include "ui_cards.h"
 #include "video_audio.h"
+#include "ui_wallpaper.h"
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <string.h>
@@ -60,7 +61,7 @@ static int sel = 0;   /* posicao dentro de 'visiveis' */
 static char ocultos[MAX_OCULTOS][TAM_ID];
 static int total_ocultos = 0;
 
-static SDL_Texture *wallpaper = NULL;
+/* A textura, inclusive os quadros de GIF, pertence a ui_wallpaper.c. */
 /* Apenas um mapa pequeno de brilho: nao manter a imagem completa na RAM. */
 #define MAPA_BRILHO_W 96
 #define MAPA_BRILHO_H 54
@@ -82,7 +83,20 @@ static int contraste_automatico = 1;
 typedef enum { TEXTO_AUTOMATICO, TEXTO_LIGHT, TEXTO_DARK } ModoTexto;
 static ModoTexto modo_texto = TEXTO_AUTOMATICO;
 static const char *const nomes_modos_texto[] = {"Automatico", "Light", "Dark"};
-static char wallpaper_path[512] = "ui/wallpapers/bk-01.jpg";
+static char wallpaper_path[512] = "ui/wallpapers/bk-01.jpg"; /* exibido */
+static char wallpaper_universal[512] = "ui/wallpapers/bk-01.jpg";
+typedef struct {
+    char console[TAM_ID];
+    char caminho[512];
+} WallpaperConsole;
+static WallpaperConsole wallpapers_console[MAX_ITENS];
+static int total_wallpapers_console = 0;
+/* 0: alterar o wallpaper universal; 1: alterar somente o console em foco. */
+static int wallpaper_escopo_console = 0;
+static int wallpapers_animados = 1;
+static int tela_wallpapers = 0;
+static int opcao_wallpapers = 0;
+#define TOTAL_OPCOES_WALLPAPERS 5
 #define MAX_WALLPAPERS 64
 static char wallpapers[MAX_WALLPAPERS][512];
 static int total_wallpapers = 0;
@@ -102,11 +116,16 @@ static char pacote_usuario_selecionado[TAM_PACOTE] = "";
 /* Aparencia dos icones dos consoles, independente do pacote da sidebar. */
 static int tela_estilo_consoles = 0;
 static int opcao_estilo_consoles = 0;
+/* Submenu proprio para escolher formato e quantidade de cards digitais. */
+static int tela_visualizacao = 0;
+static int opcao_visualizacao = 0;
 static char pacote_consoles[TAM_PACOTE] = "";
 static char pacotes_consoles[MAX_PACOTES_USUARIO][TAM_PACOTE];
 static int total_pacotes_consoles = 0;
-#define TOTAL_OPCOES_APARENCIA 10
-#define ALTURA_MODAL_APARENCIA 583
+#define TOTAL_OPCOES_APARENCIA 6
+#define TOTAL_OPCOES_LATERAL 6
+#define TOTAL_OPCOES_CONSOLES 4
+#define TOTAL_OPCOES_VISUALIZACAO 6
 static int tela_previa_wallpaper = 0;
 static int preview_indice = 0;
 static SDL_Texture *preview_textura = NULL;
@@ -166,17 +185,75 @@ static void definir_oculto(const char *id, int ocultar) {
     }
 }
 
+static int carregar_wallpaper_exibido(const char *caminho);
+static void sincronizar_wallpaper_console(void);
+
+static int indice_wallpaper_console(const char *id) {
+    if(!id || !*id) return -1;
+    for(int i=0;i<total_wallpapers_console;++i)
+        if(!strcmp(wallpapers_console[i].console,id)) return i;
+    return -1;
+}
+/* Salva caminhos por ID do console, independente da ordem do cabecalho. */
+static void definir_wallpaper_console(const char *id,const char *caminho) {
+    if(!id || !*id) return;
+    int i=indice_wallpaper_console(id);
+    if(!caminho || !*caminho) {
+        if(i>=0) {
+            memmove(&wallpapers_console[i],&wallpapers_console[i+1],
+                    (size_t)(total_wallpapers_console-i-1)*sizeof(wallpapers_console[0]));
+            --total_wallpapers_console;
+        }
+        return;
+    }
+    size_t n=strlen(caminho);
+    if(n>=sizeof(wallpapers_console[0].caminho)) return;
+    if(i<0) {
+        if(total_wallpapers_console>=MAX_ITENS) return;
+        i=total_wallpapers_console++;
+    }
+    snprintf(wallpapers_console[i].console,
+             sizeof(wallpapers_console[i].console),"%s",id);
+    snprintf(wallpapers_console[i].caminho,
+             sizeof(wallpapers_console[i].caminho),"%s",caminho);
+}
+static const char *wallpaper_do_console(const ConsoleConfig *c) {
+    if(c) {
+        int i=indice_wallpaper_console(c->id);
+        if(i>=0 && wallpapers_console[i].caminho[0])
+            return wallpapers_console[i].caminho;
+    }
+    return wallpaper_universal;
+}
+
 static void carregar_config(void) {
     FILE *f = fopen(ARQUIVO_CONFIG, "r");
     if (!f) return;
 
-    char linha[128];
+    char linha[1200];
     while (fgets(linha, sizeof(linha), f)) {
         linha[strcspn(linha, "\r\n")] = '\0';
         if (strncmp(linha, "oculto=", 7) == 0 && linha[7] != '\0')
             definir_oculto(linha + 7, 1);
         else if (strncmp(linha, "wallpaper=", 10)==0 && linha[10])
-            snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",linha+10);
+            snprintf(wallpaper_universal,sizeof(wallpaper_universal),"%s",linha+10);
+        else if (strncmp(linha, "wallpaper_console=", 18)==0) {
+            const char *valor=linha+18;
+            const char *separador=strchr(valor,'|');
+            if(separador && separador>valor && separador[1]) {
+                char id[TAM_ID];
+                size_t tamanho=(size_t)(separador-valor);
+                if(tamanho<sizeof(id)) {
+                    memcpy(id,valor,tamanho);
+                    id[tamanho]='\0';
+                    definir_wallpaper_console(id,separador+1);
+                }
+            }
+        } else if (strncmp(linha,"wallpaper_scope=",16)==0) {
+            wallpaper_escopo_console=!strcmp(linha+16,"console");
+        } else if (strncmp(linha,"wallpaper_animated=",19)==0) {
+            wallpapers_animados=atoi(linha+19)!=0;
+        }
         else if (strncmp(linha,"icon_auto=",10)==0)
             contraste_automatico = atoi(linha+10)!=0;
         else if (strncmp(linha,"icon_manual=",12)==0) {
@@ -207,7 +284,7 @@ static void carregar_config(void) {
         } else if (strncmp(linha,"video_filtro=",13)==0) {
             int v=atoi(linha+13); if(v>=0 && v<=1) video_filtro=v;
         } else if (strncmp(linha,"video_proporcao=",16)==0) {
-            int v=atoi(linha+16); if(v>=0 && v<=2) video_proporcao=v;
+            int v=atoi(linha+16); video_proporcao=(v==1);
         } else if (strncmp(linha,"game_view=",10)==0) {
             ui_game_view_set(strcmp(linha+10,"card")==0
                              ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
@@ -224,7 +301,13 @@ static void salvar_config(void) {
     for (int i = 0; i < total_ocultos; ++i)
         fprintf(f, "oculto=%s\n", ocultos[i]);
     fprintf(f,"wallpaper=%s\nicon_auto=%d\nicon_manual=%d\n",
-            wallpaper_path,contraste_automatico,(int)manual_preset);
+            wallpaper_universal,contraste_automatico,(int)manual_preset);
+    fprintf(f,"wallpaper_scope=%s\nwallpaper_animated=%d\n",
+            wallpaper_escopo_console?"console":"universal",wallpapers_animados);
+    for(int i=0;i<total_wallpapers_console;++i)
+        fprintf(f,"wallpaper_console=%s|%s\n",
+                wallpapers_console[i].console,
+                wallpapers_console[i].caminho);
     fprintf(f,"video_escala=%d\nvideo_filtro=%d\nvideo_proporcao=%d\n",video_escala,video_filtro,video_proporcao);
     fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
     fprintf(f,"card_layout=%s\n",
@@ -248,6 +331,7 @@ static const ConsoleConfig *console_selecionado(void) {
 
 static void aplicar_selecao(void) {
     carousel_definir_console(console_selecionado());
+    sincronizar_wallpaper_console();
 }
 
 static void reconstruir_visiveis(const ConsoleConfig *manter) {
@@ -325,23 +409,37 @@ static SDL_Color icone_cor(int indice) {
     return p==PRESET_LIGHT ? (SDL_Color){248,249,255,255}
                            : (SDL_Color){33,45,66,255};
 }
-/* Cada preset usa imagens canonicas com sufixo de tema.
-   Pre-filtragem por media de area para os PNGs 512x512:
-   reduzimos para ate 64px no carregamento, preservando a silhueta e
-   a transparencia antes da reducao final (~64 -> 29) com filtro linear.
-   Executado somente ao trocar o preset, nunca a cada frame. */
-static SDL_Texture *icone_textura_suavizada(const char *caminho,
-                                          const SDL_Color *tingir) {
+/* Media de area para icones de diferentes tamanhos. PNGs oficiais antigos
+   e novas artes (template 512x512) recebem o mesmo tratamento. A operacao
+   ocorre apenas ao carregar/atualizar os icones, nunca a cada frame. */
+static SDL_Texture *icone_textura_preparada(const char *caminho,
+                                           const SDL_Color *tingir,
+                                           int max_w,int max_h,
+                                           int *saida_w,int *saida_h) {
+    if(saida_w) *saida_w=0;
+    if(saida_h) *saida_h=0;
     SDL_Surface *orig=IMG_Load(caminho);
     if(!orig) return NULL;
     SDL_Surface *src=SDL_ConvertSurfaceFormat(orig,SDL_PIXELFORMAT_RGBA32,0);
     SDL_FreeSurface(orig);
     if(!src) return NULL;
 
-    /* Area-average 512->64 preserva tracos finos melhor do que 512->128->29. */
-    int tw=src->w>64?64:src->w;
-    int th=src->h>64?64:src->h;
-    if(tw<=0 || th<=0) { SDL_FreeSurface(src); return NULL; }
+    if(src->w<=0 || src->h<=0 || max_w<=0 || max_h<=0) {
+        SDL_FreeSurface(src);
+        return NULL;
+    }
+    /* Reduz dentro de um limite proporcional, nunca ampliando um arquivo
+       pequeno. Preserva o aspecto mesmo em icones largos, como o NES. */
+    int tw=src->w,th=src->h;
+    if(tw>max_w || th>max_h) {
+        float fator=fminf((float)max_w/tw,(float)max_h/th);
+        tw=(int)(src->w*fator+0.5f);
+        th=(int)(src->h*fator+0.5f);
+        if(tw<1) tw=1;
+        if(th<1) th=1;
+        if(tw>max_w) tw=max_w;
+        if(th>max_h) th=max_h;
+    }
     SDL_Surface *dst=SDL_CreateRGBSurfaceWithFormat(0,tw,th,32,SDL_PIXELFORMAT_RGBA32);
     if(!dst) { SDL_FreeSurface(src); return NULL; }
     if(SDL_MUSTLOCK(src) && SDL_LockSurface(src)!=0) {
@@ -400,11 +498,23 @@ static SDL_Texture *icone_textura_suavizada(const char *caminho,
 #if SDL_VERSION_ATLEAST(2,0,12)
         SDL_SetTextureScaleMode(tex,SDL_ScaleModeLinear);
 #endif
+        if(saida_w) *saida_w=tw;
+        if(saida_h) *saida_h=th;
     }
     return tex;
 }
+/* A barra lateral conserva sua textura intermediaria compacta de ate 64px. */
+static SDL_Texture *icone_textura_suavizada(const char *caminho,
+                                           const SDL_Color *tingir) {
+    return icone_textura_preparada(caminho,tingir,64,64,NULL,NULL);
+}
 static SDL_Texture *carregar_icone_tingido(const char *caminho,SDL_Color cor) {
     return icone_textura_suavizada(caminho,&cor);
+}
+/* Consoles: 2x o limite de exibicao (84x54), para filtro linear final.
+   A imagem e reduzida uma vez, sem distorcer a proporcao nem perder alpha. */
+static SDL_Texture *carregar_icone_console(const char *caminho,int *w,int *h) {
+    return icone_textura_preparada(caminho,NULL,168,108,w,h);
 }
 /* Nomes simples, sem barras nem traversal, para selecionar pacotes locais. */
 static int nome_pacote_valido(const char *nome) {
@@ -529,10 +639,10 @@ static void recarregar_icones_consoles(void) {
                   "ui/consoles/styles/%s/%s_icon.png",
                   pacote_consoles,item->cfg->id);
             if(n>0 && (size_t)n<sizeof(caminho))
-                nova=carregar_textura(caminho,&w,&h);
+                nova=carregar_icone_console(caminho,&w,&h);
         }
         if(!nova && item->cfg->caminho_icone)
-            nova=carregar_textura(item->cfg->caminho_icone,&w,&h);
+            nova=carregar_icone_console(item->cfg->caminho_icone,&w,&h);
         if(item->icone) SDL_DestroyTexture(item->icone);
         item->icone=nova;
         item->icone_w=w;
@@ -655,7 +765,8 @@ static SDL_Color cor_legenda_local(SDL_Rect regiao, int suave, SDL_Color *sombra
 }
 static int extensao_imagem(const char *nome) {
     const char *p=strrchr(nome,'.');
-    return p && (!SDL_strcasecmp(p,".jpg") || !SDL_strcasecmp(p,".jpeg") || !SDL_strcasecmp(p,".png"));
+    return p && (!SDL_strcasecmp(p,".jpg") || !SDL_strcasecmp(p,".jpeg") ||
+                 !SDL_strcasecmp(p,".png") || !SDL_strcasecmp(p,".gif"));
 }
 static void listar_wallpapers(void) {
     total_wallpapers=0;
@@ -730,15 +841,42 @@ static void avaliar_contraste_wallpaper(void) {
     if(lum>155) auto_preset=PRESET_DARK;
     else if(lum<122) auto_preset=PRESET_LIGHT;
 }
-static void atualizar_wallpaper(const char *caminho,int persistir) {
-    SDL_Texture *novo=IMG_LoadTexture(renderer,caminho);
-    if(!novo) {ui_menu_aviso("Nao foi possivel abrir a imagem");return;}
-    if(wallpaper) SDL_DestroyTexture(wallpaper);
-    wallpaper=novo;
-    if(caminho!=wallpaper_path) snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",caminho);
+/* So troca a textura em uso quando o caminho realmente mudou.
+   Isso evita reiniciar um GIF ao navegar entre consoles que herdam o fundo. */
+static int carregar_wallpaper_exibido(const char *caminho) {
+    if(!caminho || !*caminho) return 0;
+    if(!strcmp(caminho,wallpaper_path) && ui_wallpaper_textura())
+        return 1;
+    if(!ui_wallpaper_carregar(renderer,caminho,wallpapers_animados)) return 0;
+    snprintf(wallpaper_path,sizeof(wallpaper_path),"%s",caminho);
+    /* O contraste usa o primeiro quadro da animacao; nao fica piscando. */
     avaliar_contraste_wallpaper();
     carregar_icones_preset();
     carregar_setas_preset();
+    return 1;
+}
+static void sincronizar_wallpaper_console(void) {
+    const char *caminho=wallpaper_do_console(console_selecionado());
+    if(carregar_wallpaper_exibido(caminho)) return;
+    /* Se o usuario remover o PNG/GIF de um console, ele herda o universal. */
+    if(carregar_wallpaper_exibido(wallpaper_universal)) return;
+    carregar_wallpaper_exibido("ui/wallpapers/bk-01.jpg");
+}
+static void atualizar_wallpaper(const char *caminho,int persistir) {
+    if(!caminho || !*caminho || strlen(caminho)>=sizeof(wallpaper_path)) {
+        ui_menu_aviso("Caminho do wallpaper invalido");
+        return;
+    }
+    /* Validacao antes de salvar; nao precisa manter a superficie na RAM. */
+    SDL_Surface *teste=IMG_Load(caminho);
+    if(!teste) { ui_menu_aviso("Nao foi possivel abrir o wallpaper"); return; }
+    SDL_FreeSurface(teste);
+    const ConsoleConfig *c=console_selecionado();
+    if(wallpaper_escopo_console && c)
+        definir_wallpaper_console(c->id,caminho);
+    else
+        snprintf(wallpaper_universal,sizeof(wallpaper_universal),"%s",caminho);
+    sincronizar_wallpaper_console();
     if(persistir) salvar_config();
 }
 int ui_menu_init(void) {
@@ -751,7 +889,6 @@ int ui_menu_init(void) {
     escanear_pacotes_usuario();
     escanear_pacotes_consoles();
     listar_wallpapers();
-    atualizar_wallpaper(wallpaper_path,0);
 
     size_t quantidade = 0;
     const ConsoleConfig *todos = console_registry_get_all(&quantidade);
@@ -777,7 +914,7 @@ void ui_menu_fechar(void) {
     for (int i = 0; i < total_itens; ++i)
         if (itens[i].icone) SDL_DestroyTexture(itens[i].icone);
 
-    if (wallpaper) SDL_DestroyTexture(wallpaper);
+    ui_wallpaper_fechar();
     if (seta_esq) SDL_DestroyTexture(seta_esq);
     if (seta_dir) SDL_DestroyTexture(seta_dir);
     for (int i = 0; i < TOTAL_ACOES_LATERAIS; ++i)
@@ -785,7 +922,7 @@ void ui_menu_fechar(void) {
 
     if(preview_textura) SDL_DestroyTexture(preview_textura);
     preview_textura=NULL;
-    wallpaper = seta_esq = seta_dir = NULL;
+    seta_esq = seta_dir = NULL;
     total_itens = total_visiveis = sel = 0;
     limpar_cache_arredondado();
     ui_texto_fechar();
@@ -804,6 +941,24 @@ void ui_menu_focar_carrossel(void) {
 void ui_menu_aviso(const char *mensagem) {
     snprintf(aviso, sizeof(aviso), "%s", mensagem ? mensagem : "");
     aviso_ate = SDL_GetTicks() + DURACAO_AVISO_MS;
+}
+
+/* Mostra se a imagem de cards realmente foi encontrada. Isso distingue
+   "recarregou" de "carregou uma nova capa" sem confundir com as etiquetas. */
+static void avisar_status_cards(void) {
+    char mensagem[128];
+    size_t quantidade=carousel_contar_cards_exclusivos();
+    const ConsoleConfig *c=console_selecionado();
+    if(!quantidade && c) {
+        snprintf(mensagem,sizeof(mensagem),
+                 "0 cards exclusivos: confira labels/%s/cards/",
+                 c->id);
+    } else {
+        snprintf(mensagem,sizeof(mensagem),
+                 "%zu capa(s) digital(is) exclusiva(s) encontrada(s)",
+                 quantidade);
+    }
+    ui_menu_aviso(mensagem);
 }
 
 static int tecla_confirmar(SDL_Keycode t) {
@@ -857,36 +1012,43 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT)
             tela_estilo_lateral=0;
         else if(tecla==SDLK_UP) {
-            opcao_estilo_lateral=(opcao_estilo_lateral+4)%5;
+            opcao_estilo_lateral=(opcao_estilo_lateral+TOTAL_OPCOES_LATERAL-1)%TOTAL_OPCOES_LATERAL;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla==SDLK_DOWN) {
-            opcao_estilo_lateral=(opcao_estilo_lateral+1)%5;
+            opcao_estilo_lateral=(opcao_estilo_lateral+1)%TOTAL_OPCOES_LATERAL;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if(opcao_estilo_lateral!=4) ui_som_tocar(UI_SOM_TROCA);
+            if(opcao_estilo_lateral!=TOTAL_OPCOES_LATERAL-1)
+                ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_estilo_lateral) {
-            case 0:
+            case 0: /* Modo automatico ou preset manual dos icones oficiais. */
+                contraste_automatico=!contraste_automatico;
+                carregar_icones_preset();
+                carregar_setas_preset();
+                break;
+            case 1:
+                if(contraste_automatico) {
+                    manual_preset=auto_preset;
+                    contraste_automatico=0;
+                } else manual_preset=(Preset)((manual_preset+1)%3);
+                carregar_icones_preset();
+                carregar_setas_preset();
+                break;
+            case 2: /* Pacote local substitui apenas os icones da sidebar. */
                 if(total_pacotes_usuario>0) {
                     proximo_pacote_usuario();
                     carregar_icones_preset();
-                } else ui_menu_aviso("Adicione um pacote completo em ui/styles/");
-                break;
-            case 1:
-                sidebar_pilula=!sidebar_pilula;
-                break;
-            case 2:
-                consoles_cabecalho_visivel=!consoles_cabecalho_visivel;
-                if(!consoles_cabecalho_visivel && foco==FOCO_CABECALHO)
-                    foco=FOCO_CARROSSEL;
+                } else ui_menu_aviso("Adicione um pacote em ui/styles/");
                 break;
             case 3:
-                escanear_pacotes_usuario();
-                carregar_icones_preset();
-                ui_menu_aviso("Lista de estilos atualizada");
+                sidebar_pilula=!sidebar_pilula;
                 break;
             case 4:
-                tela_estilo_lateral=0;
+                escanear_pacotes_usuario();
+                carregar_icones_preset();
+                ui_menu_aviso("Pacotes da barra atualizados");
                 break;
+            case 5: tela_estilo_lateral=0; break;
             }
             salvar_config();
         }
@@ -896,88 +1058,175 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) {
             tela_estilo_consoles=0;
         } else if(tecla==SDLK_UP) {
-            opcao_estilo_consoles=(opcao_estilo_consoles+2)%3;
+            opcao_estilo_consoles=(opcao_estilo_consoles+TOTAL_OPCOES_CONSOLES-1)%TOTAL_OPCOES_CONSOLES;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla==SDLK_DOWN) {
-            opcao_estilo_consoles=(opcao_estilo_consoles+1)%3;
+            opcao_estilo_consoles=(opcao_estilo_consoles+1)%TOTAL_OPCOES_CONSOLES;
             ui_som_tocar(UI_SOM_NAVEGACAO);
         } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if(opcao_estilo_consoles!=2) ui_som_tocar(UI_SOM_TROCA);
+            if(opcao_estilo_consoles!=TOTAL_OPCOES_CONSOLES-1)
+                ui_som_tocar(UI_SOM_TROCA);
             switch(opcao_estilo_consoles) {
             case 0:
                 if(total_pacotes_consoles>0) {
                     proximo_pacote_consoles();
                     recarregar_icones_consoles();
-                } else ui_menu_aviso("Copie icones em ui/consoles/styles/");
+                } else ui_menu_aviso("Adicione icones em ui/consoles/styles/");
                 break;
             case 1:
+                consoles_cabecalho_visivel=!consoles_cabecalho_visivel;
+                if(!consoles_cabecalho_visivel && foco==FOCO_CABECALHO)
+                    foco=FOCO_CARROSSEL;
+                break;
+            case 2:
                 escanear_pacotes_consoles();
                 recarregar_icones_consoles();
                 ui_menu_aviso("Pacotes de consoles atualizados");
                 break;
-            case 2: tela_estilo_consoles=0; break;
+            case 3: tela_estilo_consoles=0; break;
             }
             salvar_config();
         }
         return MENU_ACAO_NENHUMA;
     }
-    if (tela_aparencia) {
-        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
-        else if(tecla==SDLK_UP) { opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
-        else if(tecla==SDLK_DOWN) { opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA; ui_som_tocar(UI_SOM_NAVEGACAO); }
-        else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
-            if (opcao_aparencia != 9) ui_som_tocar(UI_SOM_TROCA);
-            switch(opcao_aparencia) {
+    if (tela_visualizacao) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT)
+            tela_visualizacao=0;
+        else if(tecla==SDLK_UP) {
+            opcao_visualizacao=(opcao_visualizacao+TOTAL_OPCOES_VISUALIZACAO-1)%TOTAL_OPCOES_VISUALIZACAO;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_visualizacao=(opcao_visualizacao+1)%TOTAL_OPCOES_VISUALIZACAO;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_visualizacao!=TOTAL_OPCOES_VISUALIZACAO-1)
+                ui_som_tocar(UI_SOM_TROCA);
+            switch(opcao_visualizacao) {
             case 0:
-                contraste_automatico=!contraste_automatico;
-                break;
-            case 1:
-                if(contraste_automatico) {
-                    manual_preset=auto_preset;
-                    contraste_automatico=0;
-                } else manual_preset=(Preset)((manual_preset+1)%3);
-                break;
-            case 2:
-                modo_texto=(ModoTexto)((modo_texto+1)%3);
-                break;
-            case 3:
                 ui_game_view_set(ui_game_view_get()==GAME_VIEW_CARTRIDGE
                                   ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
                 if(ui_game_view_get()==GAME_VIEW_CARD)
                     carousel_recarregar_cards();
                 break;
-            case 4:
-                ui_card_layout_set((CardLayout)((ui_card_layout_get()+1)%3));
+            case 1: case 2: case 3: {
+                /* Selecionar o layout digital ja abre Cards, sem tocar nos
+                   desenhos ou animacoes de cartuchos fisicos. */
+                CardLayout proximo=opcao_visualizacao==1?CARD_LAYOUT_3:
+                                  opcao_visualizacao==2?CARD_LAYOUT_5:CARD_LAYOUT_GRID;
+                ui_card_layout_set(proximo);
+                if(ui_game_view_get()!=GAME_VIEW_CARD) {
+                    ui_game_view_set(GAME_VIEW_CARD);
+                    carousel_recarregar_cards();
+                }
                 break;
-            case 5:
+            }
+            case 4:
+                carousel_recarregar_cards();
+                avisar_status_cards();
+                break;
+            case 5: tela_visualizacao=0; break;
+            }
+            salvar_config();
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+    if (tela_wallpapers) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) {
+            tela_wallpapers=0;
+        } else if(tecla==SDLK_UP) {
+            opcao_wallpapers=(opcao_wallpapers+TOTAL_OPCOES_WALLPAPERS-1)
+                              %TOTAL_OPCOES_WALLPAPERS;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_wallpapers=(opcao_wallpapers+1)%TOTAL_OPCOES_WALLPAPERS;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_wallpapers!=TOTAL_OPCOES_WALLPAPERS-1)
+                ui_som_tocar(UI_SOM_TROCA);
+            switch(opcao_wallpapers) {
+            case 0:
+                if(console_selecionado())
+                    wallpaper_escopo_console=!wallpaper_escopo_console;
+                else ui_menu_aviso("Nenhum console ativo");
+                salvar_config();
+                break;
+            case 1: {
                 listar_wallpapers();
-                preview_indice=wallpaper_indice;
+                const ConsoleConfig *c=console_selecionado();
+                const char *desejado=wallpaper_escopo_console && c
+                    ? wallpaper_do_console(c) : wallpaper_universal;
+                preview_indice=0;
+                for(int i=0;i<total_wallpapers;++i)
+                    if(!strcmp(desejado,wallpapers[i])) {
+                        preview_indice=i;
+                        break;
+                    }
                 preview_custom_path[0]='\0';
                 if(preview_textura) SDL_DestroyTexture(preview_textura);
                 preview_textura=total_wallpapers
                     ? IMG_LoadTexture(renderer,wallpapers[preview_indice]) : NULL;
                 if(total_wallpapers) tela_previa_wallpaper=1;
-                else ui_menu_aviso("Nenhum wallpaper disponivel");
+                else ui_menu_aviso("Adicione PNG, JPG ou GIF em ui/wallpapers/");
                 break;
-            case 6:
-                atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1);
+            }
+            case 2:
+                if(wallpaper_escopo_console && console_selecionado()) {
+                    definir_wallpaper_console(console_selecionado()->id,NULL);
+                    sincronizar_wallpaper_console();
+                    ui_menu_aviso("Console usa novamente o wallpaper universal");
+                } else {
+                    atualizar_wallpaper("ui/wallpapers/bk-01.jpg",0);
+                    ui_menu_aviso("Wallpaper universal restaurado");
+                }
+                salvar_config();
                 break;
-            case 7:
+            case 3:
+                wallpapers_animados=!wallpapers_animados;
+                if(wallpaper_path[0])
+                    ui_wallpaper_carregar(renderer,wallpaper_path,wallpapers_animados);
+                salvar_config();
+                break;
+            case 4:
+                tela_wallpapers=0;
+                break;
+            }
+        }
+        return MENU_ACAO_NENHUMA;
+    }
+    if (tela_aparencia) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
+        else if(tecla==SDLK_UP) {
+            opcao_aparencia=(opcao_aparencia+TOTAL_OPCOES_APARENCIA-1)%TOTAL_OPCOES_APARENCIA;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_aparencia=(opcao_aparencia+1)%TOTAL_OPCOES_APARENCIA;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_aparencia!=TOTAL_OPCOES_APARENCIA-1) ui_som_tocar(UI_SOM_TROCA);
+            switch(opcao_aparencia) {
+            case 0:
                 escanear_pacotes_usuario();
                 tela_estilo_lateral=1;
                 opcao_estilo_lateral=0;
                 break;
-            case 8:
+            case 1:
                 escanear_pacotes_consoles();
                 tela_estilo_consoles=1;
                 opcao_estilo_consoles=0;
                 break;
-            case 9:
-                tela_aparencia=0;
+            case 2:
+                tela_visualizacao=1;
+                opcao_visualizacao=0;
                 break;
+            case 3:
+                modo_texto=(ModoTexto)((modo_texto+1)%3);
+                break;
+            case 4:
+                tela_wallpapers=1;
+                opcao_wallpapers=0;
+                break;
+            case 5: tela_aparencia=0; break;
             }
-            carregar_icones_preset();
-            carregar_setas_preset();
             salvar_config();
         }
         return MENU_ACAO_NENHUMA;
@@ -990,7 +1239,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         else if(tecla_confirmar(tecla)) {
             if(tela_configuracoes==2) {
                 switch(opcao_configuracoes) {
-                case 0: video_proporcao=(video_proporcao+1)%3; break;
+                case 0: video_proporcao=(video_proporcao+1)%2; break;
                 case 1: video_escala=(video_escala+1)%3; break;
                 case 2: video_filtro=!video_filtro; break;
                 case 3: video_proporcao=video_escala=video_filtro=0; break;
@@ -1011,7 +1260,7 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     if(tecla==SDLK_F5 && !tela_configuracoes &&
        ui_game_view_get()==GAME_VIEW_CARD) {
         carousel_recarregar_cards();
-        ui_menu_aviso("Capas digitais recarregadas");
+        avisar_status_cards();
         ui_som_tocar(UI_SOM_TROCA);
         return MENU_ACAO_NENHUMA;
     }
@@ -1138,31 +1387,76 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
     return MENU_ACAO_NENHUMA;
 }
 
+/* Mesma geometria para renderizacao e hit-test (mouse/controle/teclado).
+   Nenhum item fica fora do painel quando a janela e menor. */
+typedef enum {
+    MODAL_NENHUM, MODAL_CONFIG, MODAL_CUSTOMIZACAO,
+    MODAL_BARRA_LATERAL, MODAL_CONSOLES, MODAL_JOGOS, MODAL_WALLPAPERS
+} MenuModal;
+
+static MenuModal menu_modal_atual(void) {
+    if(tela_wallpapers) return MODAL_WALLPAPERS;
+    if(tela_estilo_lateral) return MODAL_BARRA_LATERAL;
+    if(tela_estilo_consoles) return MODAL_CONSOLES;
+    if(tela_visualizacao) return MODAL_JOGOS;
+    if(tela_aparencia) return MODAL_CUSTOMIZACAO;
+    if(tela_configuracoes) return MODAL_CONFIG;
+    return MODAL_NENHUM;
+}
+static int menu_modal_quantidade(MenuModal m) {
+    switch(m) {
+    case MODAL_BARRA_LATERAL: return TOTAL_OPCOES_LATERAL;
+    case MODAL_CONSOLES: return TOTAL_OPCOES_CONSOLES;
+    case MODAL_JOGOS: return TOTAL_OPCOES_VISUALIZACAO;
+    case MODAL_WALLPAPERS: return TOTAL_OPCOES_WALLPAPERS;
+    case MODAL_CUSTOMIZACAO: return TOTAL_OPCOES_APARENCIA;
+    case MODAL_CONFIG: return total_opcoes_config;
+    default: return 0;
+    }
+}
+static SDL_Rect menu_modal_geometria(MenuModal m,int vw,int vh,int *passo) {
+    int n=menu_modal_quantidade(m);
+    int largura=m==MODAL_BARRA_LATERAL?460:
+                m==MODAL_CONSOLES?450:
+                m==MODAL_JOGOS?460:
+                m==MODAL_WALLPAPERS?535:
+                m==MODAL_CUSTOMIZACAO?435:(m==MODAL_CONFIG && tela_configuracoes==2?480:340);
+    if(largura>vw-42) largura=vw-42;
+    if(largura<200) largura=200;
+    int altura=75+n*(m==MODAL_CONFIG?45:50);
+    if(altura>vh-46) altura=vh-46;
+    if(altura<90) altura=90;
+    int passo_linha=(altura-67)/(n?n:1);
+    if(passo_linha>50) passo_linha=50;
+    if(passo_linha<16) passo_linha=16;
+    if(passo) *passo=passo_linha;
+    return (SDL_Rect){(vw-largura)/2,(vh-altura)/2,largura,altura};
+}
 /* Clique em qualquer cartucho lateral move o mesmo indice do titulo. */
 MenuAcao ui_menu_clique(int mx,int my) {
     int vw=0,vh=0;
     obter_tamanho_ui(&vw,&vh);
     if(vw<=0 || vh<=0) return MENU_ACAO_NENHUMA;
     if(ui_cards_editando() || tela_previa_wallpaper) return MENU_ACAO_NENHUMA;
-    if(tela_aparencia || tela_configuracoes ||
-       tela_estilo_lateral || tela_estilo_consoles) {
-        int sub=tela_estilo_lateral;
-        int cons=tela_estilo_consoles;
-        int custom=tela_aparencia && !sub && !cons;
-        int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:total_opcoes_config));
-        int pw=cons?445:(sub?440:(custom?395:(tela_configuracoes==2?445:340)));
-        if(pw>vw-42) pw=vw-42;
-        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:(tela_configuracoes==2?310:223)));
-        if(ph>vh-46) ph=vh-46;
-        int x=(vw-pw)/2;
-        int y=(vh-ph)/2;
-        int passo=(custom||sub||cons)?50:45;
-        if(mx>=x+11 && mx<x+pw-11 && my>=y+59 && my<y+59+n*passo) {
-            int item=(my-y-59)/passo;
-            if(cons) opcao_estilo_consoles=item;
-            else if(sub) opcao_estilo_lateral=item;
-            else if(custom) opcao_aparencia=item;
-            else opcao_configuracoes=item;
+    MenuModal modal=menu_modal_atual();
+    if(modal!=MODAL_NENHUM) {
+        int passo=0;
+        SDL_Rect painel=menu_modal_geometria(modal,vw,vh,&passo);
+        int n=menu_modal_quantidade(modal);
+        int y0=painel.y+59;
+        if(mx>=painel.x+11 && mx<painel.x+painel.w-11 &&
+           my>=y0 && my<y0+n*passo) {
+            int item=(my-y0)/passo;
+            if(item<0 || item>=n) return MENU_ACAO_NENHUMA;
+            switch(modal) {
+            case MODAL_BARRA_LATERAL: opcao_estilo_lateral=item; break;
+            case MODAL_CONSOLES: opcao_estilo_consoles=item; break;
+            case MODAL_JOGOS: opcao_visualizacao=item; break;
+            case MODAL_WALLPAPERS: opcao_wallpapers=item; break;
+            case MODAL_CUSTOMIZACAO: opcao_aparencia=item; break;
+            case MODAL_CONFIG: opcao_configuracoes=item; break;
+            default: break;
+            }
             return ui_menu_tecla(SDLK_RETURN,0);
         }
         return MENU_ACAO_NENHUMA;
@@ -1215,7 +1509,8 @@ MenuAcao ui_menu_clique(int mx,int my) {
 void ui_menu_rolagem(int direcao) {
     if(ui_cards_editando() || tela_previa_wallpaper ||
        tela_aparencia || tela_configuracoes || tela_estilo_lateral ||
-       tela_estilo_consoles || !direcao) return;
+       tela_estilo_consoles || tela_visualizacao || tela_wallpapers ||
+       !direcao) return;
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
@@ -1226,7 +1521,7 @@ void ui_menu_rolagem(int direcao) {
 /* Arrastar uma imagem para a janela abre a previa, sem modificar preferencias ate confirmar. */
 void ui_menu_wallpaper_solto(const char *caminho) {
     if(!caminho || !*caminho || !extensao_imagem(caminho)) {
-        ui_menu_aviso("Solte um arquivo PNG ou JPG"); return;
+        ui_menu_aviso("Solte um PNG, JPG ou GIF"); return;
     }
     SDL_Texture *tex=IMG_LoadTexture(renderer,caminho);
     if(!tex) {ui_menu_aviso("Imagem invalida");return;}
@@ -1389,6 +1684,7 @@ void ui_menu_controle_conectado(int sim) { (void)sim; }
 static void desenhar_fundo(int vw, int vh) {
     const UiTema *tema = ui_tema_atual();
 
+    SDL_Texture *wallpaper=ui_wallpaper_textura();
     if (!wallpaper) {
         preencher((SDL_Rect){ 0, 0, vw, vh }, tema->cor_fundo);
         return;
@@ -1781,135 +2077,183 @@ void ui_menu_desenhar(void) {
             int w,h; SDL_QueryTexture(preview_textura,NULL,NULL,&w,&h);
             desenhar_encaixado(preview_textura,w,h,(SDL_Rect){caixa.x+20,caixa.y+25,420,225},255);
         }
-        ui_texto_desenhar_centro("<  PREVIA DO WALLPAPER  >",vw/2,caixa.y+258,1,(SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0});
+        char cabecalho_previa[128];
+        const ConsoleConfig *c=console_selecionado();
+        snprintf(cabecalho_previa,sizeof(cabecalho_previa),
+                 "WALLPAPER: %s",
+                 wallpaper_escopo_console && c?c->id:"UNIVERSAL");
+        ui_texto_desenhar_centro(cabecalho_previa,vw/2,caixa.y+258,1,
+                 (SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0});
         ui_texto_desenhar_centro("ENTER Aplicar   ESC Cancelar",vw/2,caixa.y+284,1,(SDL_Color){220,225,235,255},(SDL_Color){0,0,0,0});
-    } else if(tela_configuracoes || tela_aparencia ||
-              tela_estilo_lateral || tela_estilo_consoles) {
-        const int sub=tela_estilo_lateral;
-        const int cons=tela_estilo_consoles;
-        const int custom=tela_aparencia && !sub && !cons;
-        const int n=cons?3:(sub?5:(custom?TOTAL_OPCOES_APARENCIA:total_opcoes_config));
+    } else if(menu_modal_atual()!=MODAL_NENHUM) {
+        const MenuModal modal=menu_modal_atual();
+        const int n=menu_modal_quantidade(modal);
         const int claro=preset_ativo()!=PRESET_LIGHT;
         SDL_Color tinta=claro?(SDL_Color){27,43,72,255}:(SDL_Color){245,247,255,255};
         SDL_Color fundo=claro?(SDL_Color){236,246,255,255}:(SDL_Color){22,35,72,255};
         SDL_Color borda=claro?(SDL_Color){255,255,255,240}:(SDL_Color){194,209,245,115};
-        int pw=cons?445:(sub?440:(custom?395:(tela_configuracoes==2?445:340)));
-        if(pw>vw-42) pw=vw-42;
-        int ph=cons?245:(sub?334:(custom?ALTURA_MODAL_APARENCIA:(tela_configuracoes==2?310:223)));
-        if(ph>vh-46) ph=vh-46;
-        /* Modal centralizado com veu de fundo; nao depende da lateral. */
-        SDL_Rect painel={(vw-pw)/2,(vh-ph)/2,pw,ph};
+        int altura_linha=0;
+        SDL_Rect painel=menu_modal_geometria(modal,vw,vh,&altura_linha);
         preencher((SDL_Rect){0,0,vw,vh},(SDL_Color){8,12,24,claro?70:120});
         arredondado((SDL_Rect){painel.x+3,painel.y+5,painel.w,painel.h},25,
                     (SDL_Color){10,24,46,35},0);
         arredondado(painel,25,fundo,0);
         arredondado(painel,25,borda,1);
-        ui_texto_desenhar(cons?"ICONES DOS CONSOLES":
-                          sub?"BARRA LATERAL":
-                          custom?"APARÊNCIA":tela_configuracoes==2?"VIDEO":"CONFIGURAÇÕES",
-                          painel.x+20,painel.y+17,2,tinta,
+        const char *cabecalho=modal==MODAL_BARRA_LATERAL?"BARRA LATERAL":
+                              modal==MODAL_CONSOLES?"CONSOLES":
+                              modal==MODAL_JOGOS?"VISUALIZACAO DOS JOGOS":
+                              modal==MODAL_WALLPAPERS?"WALLPAPERS":
+                              modal==MODAL_CUSTOMIZACAO?"CUSTOMIZAÇÃO":
+                              "CONFIGURAÇÕES";
+        ui_texto_desenhar(cabecalho,painel.x+20,painel.y+17,2,tinta,
                           (SDL_Color){0,0,0,0});
-        int altura_linha=(custom||sub||cons)?50:45;
         for(int i=0;i<n;++i) {
-            char nome[150];
-            if(cons) {
+            char nome[180]={0};
+            int selecionado=0;
+            switch(modal) {
+            case MODAL_BARRA_LATERAL:
+                selecionado=opcao_estilo_lateral==i;
                 switch(i) {
                 case 0:
-                    snprintf(nome,sizeof(nome),"Pacote dos consoles: %s",
-                         pacote_consoles[0]?pacote_consoles:"Padrao");
+                    snprintf(nome,sizeof(nome),"Icones padrao: %s (%s)",
+                             contraste_automatico?"Automatico":"Manual",
+                             nomes_presets[preset_ativo()]);
                     break;
                 case 1:
-                    snprintf(nome,sizeof(nome),"Atualizar pacotes (%d)",
-                             total_pacotes_consoles);
+                    snprintf(nome,sizeof(nome),"Preset manual: %s%s",
+                             nomes_presets[manual_preset],
+                             contraste_automatico?" (inativo)":"");
                     break;
-                default: snprintf(nome,sizeof(nome),"Voltar");
-                }
-            } else if(sub) {
-                switch(i) {
-                case 0:
-                    if(pacote_usuario_selecionado[0])
-                        snprintf(nome,sizeof(nome),"Pacote de icones: %s",
-                                 pacote_usuario_selecionado);
-                    else
-                        snprintf(nome,sizeof(nome),"Pacote: Padrao (%s)",
-                                 nomes_presets[preset_ativo()]);
+                case 2:
+                    snprintf(nome,sizeof(nome),"Pacote de icones: %s",
+                             pacote_usuario_selecionado[0]?
+                             pacote_usuario_selecionado:"Padrao");
                     break;
-                case 1:
+                case 3:
                     snprintf(nome,sizeof(nome),"Fundo lateral: %s",
                              sidebar_pilula?"Pilula":"Somente icones");
                     break;
-                case 2:
-                    snprintf(nome,sizeof(nome),"Consoles no topo: %s",
-                             consoles_cabecalho_visivel?"Mostrar":"Ocultar");
-                    break;
-                case 3:
+                case 4:
                     snprintf(nome,sizeof(nome),"Atualizar pacotes (%d)",
                              total_pacotes_usuario);
                     break;
-                default: snprintf(nome,sizeof(nome),"Voltar");
+                default: snprintf(nome,sizeof(nome),"Voltar"); break;
                 }
-            } else if(custom) {
+                break;
+            case MODAL_CONSOLES:
+                selecionado=opcao_estilo_consoles==i;
                 switch(i) {
                 case 0:
-                    snprintf(nome,sizeof(nome),"Icones: %s (%s)",
-                        contraste_automatico?"Automatico":"Manual",
-                        nomes_presets[preset_ativo()]);
+                    snprintf(nome,sizeof(nome),"Pacote de icones: %s",
+                             pacote_consoles[0]?pacote_consoles:"Padrao");
                     break;
                 case 1:
-                    if(contraste_automatico)
-                        snprintf(nome,sizeof(nome),"Preset manual: Inativo");
-                    else
-                        snprintf(nome,sizeof(nome),"Preset manual: %s",
-                                 nomes_presets[preset_ativo()]);
+                    snprintf(nome,sizeof(nome),"Consoles no topo: %s",
+                             consoles_cabecalho_visivel?"Mostrar":"Ocultar");
                     break;
                 case 2:
-                    snprintf(nome,sizeof(nome),"Cor dos titulos: %s",nomes_modos_texto[modo_texto]);
+                    snprintf(nome,sizeof(nome),"Atualizar pacotes (%d)",
+                             total_pacotes_consoles);
                     break;
-                case 3:
-                    snprintf(nome,sizeof(nome),"Visualização: %s",
+                default: snprintf(nome,sizeof(nome),"Voltar"); break;
+                }
+                break;
+            case MODAL_JOGOS:
+                selecionado=opcao_visualizacao==i;
+                switch(i) {
+                case 0:
+                    snprintf(nome,sizeof(nome),"Exibicao: %s",
                              ui_game_view_get()==GAME_VIEW_CARD?"Cards":"Cartuchos");
                     break;
-                case 4:
-                    snprintf(nome,sizeof(nome),"Layout digital: %s",
-                         ui_card_layout_get()==CARD_LAYOUT_GRID?"Grade":
-                         ui_card_layout_get()==CARD_LAYOUT_5?"5 cards":"3 cards");
+                case 1:
+                    snprintf(nome,sizeof(nome),"3 cards por carrossel%s",
+                             ui_card_layout_get()==CARD_LAYOUT_3?"  (selecionado)":"");
                     break;
-                case 5: snprintf(nome,sizeof(nome),"Escolher wallpaper"); break;
-                case 6: snprintf(nome,sizeof(nome),"Restaurar wallpaper padrão"); break;
-                case 7: snprintf(nome,sizeof(nome),"Personalizar barra lateral"); break;
-                case 8: snprintf(nome,sizeof(nome),"Personalizar consoles"); break;
+                case 2:
+                    snprintf(nome,sizeof(nome),"5 cards por carrossel%s",
+                             ui_card_layout_get()==CARD_LAYOUT_5?"  (selecionado)":"");
+                    break;
+                case 3:
+                    snprintf(nome,sizeof(nome),"Visualizacao em grade%s",
+                             ui_card_layout_get()==CARD_LAYOUT_GRID?"  (selecionado)":"");
+                    break;
+                case 4: snprintf(nome,sizeof(nome),"Recarregar capas digitais"); break;
+                default: snprintf(nome,sizeof(nome),"Voltar"); break;
+                }
+                break;
+            case MODAL_WALLPAPERS: {
+                selecionado=opcao_wallpapers==i;
+                const ConsoleConfig *c=console_selecionado();
+                switch(i) {
+                case 0:
+                    if(wallpaper_escopo_console && c)
+                        snprintf(nome,sizeof(nome),
+                                 "Aplicar somente em: %s",c->nome);
+                    else snprintf(nome,sizeof(nome),
+                                  "Aplicar para: Todos os consoles");
+                    break;
+                case 1:
+                    snprintf(nome,sizeof(nome),
+                             "Escolher wallpaper (PNG / JPG / GIF)");
+                    break;
+                case 2:
+                    snprintf(nome,sizeof(nome),"%s",
+                        wallpaper_escopo_console && c
+                        ? "Usar wallpaper universal neste console"
+                        : "Restaurar wallpaper universal padrao");
+                    break;
+                case 3:
+                    snprintf(nome,sizeof(nome),"GIFs animados: %s",
+                             wallpapers_animados?"Ligados":"Desligados");
+                    break;
                 default: snprintf(nome,sizeof(nome),"Voltar");
                 }
-            } else {
+                break;
+            }
+            case MODAL_CUSTOMIZACAO:
+                selecionado=opcao_aparencia==i;
+                switch(i) {
+                case 0: snprintf(nome,sizeof(nome),"Barra lateral"); break;
+                case 1: snprintf(nome,sizeof(nome),"Consoles"); break;
+                case 2: snprintf(nome,sizeof(nome),"Visualizacao dos jogos"); break;
+                case 3:
+                    snprintf(nome,sizeof(nome),"Cor dos titulos: %s",
+                             nomes_modos_texto[modo_texto]);
+                    break;
+                case 4: snprintf(nome,sizeof(nome),"Wallpapers"); break;
+                default: snprintf(nome,sizeof(nome),"Voltar"); break;
+                }
+                break;
+            case MODAL_CONFIG:
+                selecionado=opcao_configuracoes==i;
                 if(tela_configuracoes==2) {
-                    const char *ratios[]={"Original do console","Pixels quadrados","4:3"};
+                    const char *ratios[]={"Original do console","Pixels quadrados"};
                     const char *escalas[]={"Automatico","Inteira (Pixel Perfect)","Ajuste livre"};
                     switch(i) {
                     case 0: snprintf(nome,sizeof(nome),"Proporcao: %s",ratios[video_proporcao]); break;
                     case 1: snprintf(nome,sizeof(nome),"Balanceamento: %s",escalas[video_escala]); break;
                     case 2: snprintf(nome,sizeof(nome),"Filtragem: %s",video_filtro?"Suave":"Nitida"); break;
                     case 3: snprintf(nome,sizeof(nome),"Restaurar padroes"); break;
-                    default: snprintf(nome,sizeof(nome),"Voltar");
+                    default: snprintf(nome,sizeof(nome),"Voltar"); break;
                     }
                 } else snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":i==1?"Video":"Voltar");
+                break;
+            default: break;
             }
-            SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,painel.w-22,altura_linha-6};
-            if((cons?opcao_estilo_consoles:
-                 sub?opcao_estilo_lateral:
-                 custom?opcao_aparencia:opcao_configuracoes)==i) {
-                /* Sem camada escura atras da legenda selecionada. */
+            SDL_Rect linha={painel.x+11,painel.y+59+i*altura_linha,
+                            painel.w-22,altura_linha-6};
+            if(selecionado) {
                 SDL_Color borda_ativa=preset_ativo()==PRESET_COLORFUL
                     ? (SDL_Color){0xC8,0x46,0x82,235}
                     : claro ? (SDL_Color){38,68,116,225}
                             : (SDL_Color){207,220,255,230};
                 contorno_selecao(linha,14,borda_ativa);
             }
-            char nome_ajustado[150];
+            char nome_ajustado[180];
             ui_texto_ajustar(nome,linha.w-22,1,
                              nome_ajustado,sizeof(nome_ajustado));
             ui_texto_desenhar(nome_ajustado,linha.x+11,linha.y+10,1,
                               tinta,(SDL_Color){0,0,0,0});
         }
-
     }
 }

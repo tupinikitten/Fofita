@@ -47,7 +47,6 @@ static void desenhar_jogo_com_proporcao(void) {
     float proporcao = proporcao_console();
     if (proporcao <= 0.0f) proporcao = proporcao_video > 0.0f ? proporcao_video : nativa;
     if (video_proporcao == 1) proporcao = nativa;
-    else if (video_proporcao == 2) proporcao = 4.0f/3;
     int destino_w = janela_w;
     int destino_h = (int)(destino_w / proporcao + 0.5f);
 
