@@ -1373,10 +1373,11 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
    Nenhum item fica fora do painel quando a janela e menor. */
 typedef enum {
     MODAL_NENHUM, MODAL_CONFIG, MODAL_CUSTOMIZACAO,
-    MODAL_BARRA_LATERAL, MODAL_CONSOLES, MODAL_JOGOS
+    MODAL_BARRA_LATERAL, MODAL_CONSOLES, MODAL_JOGOS, MODAL_WALLPAPERS
 } MenuModal;
 
 static MenuModal menu_modal_atual(void) {
+    if(tela_wallpapers) return MODAL_WALLPAPERS;
     if(tela_estilo_lateral) return MODAL_BARRA_LATERAL;
     if(tela_estilo_consoles) return MODAL_CONSOLES;
     if(tela_visualizacao) return MODAL_JOGOS;
@@ -1389,6 +1390,7 @@ static int menu_modal_quantidade(MenuModal m) {
     case MODAL_BARRA_LATERAL: return TOTAL_OPCOES_LATERAL;
     case MODAL_CONSOLES: return TOTAL_OPCOES_CONSOLES;
     case MODAL_JOGOS: return TOTAL_OPCOES_VISUALIZACAO;
+    case MODAL_WALLPAPERS: return TOTAL_OPCOES_WALLPAPERS;
     case MODAL_CUSTOMIZACAO: return TOTAL_OPCOES_APARENCIA;
     case MODAL_CONFIG: return total_opcoes_config;
     default: return 0;
@@ -1399,6 +1401,7 @@ static SDL_Rect menu_modal_geometria(MenuModal m,int vw,int vh,int *passo) {
     int largura=m==MODAL_BARRA_LATERAL?460:
                 m==MODAL_CONSOLES?450:
                 m==MODAL_JOGOS?460:
+                m==MODAL_WALLPAPERS?535:
                 m==MODAL_CUSTOMIZACAO?435:340;
     if(largura>vw-42) largura=vw-42;
     if(largura<200) largura=200;
@@ -1431,6 +1434,7 @@ MenuAcao ui_menu_clique(int mx,int my) {
             case MODAL_BARRA_LATERAL: opcao_estilo_lateral=item; break;
             case MODAL_CONSOLES: opcao_estilo_consoles=item; break;
             case MODAL_JOGOS: opcao_visualizacao=item; break;
+            case MODAL_WALLPAPERS: opcao_wallpapers=item; break;
             case MODAL_CUSTOMIZACAO: opcao_aparencia=item; break;
             case MODAL_CONFIG: opcao_configuracoes=item; break;
             default: break;
@@ -2080,6 +2084,7 @@ void ui_menu_desenhar(void) {
         const char *cabecalho=modal==MODAL_BARRA_LATERAL?"BARRA LATERAL":
                               modal==MODAL_CONSOLES?"CONSOLES":
                               modal==MODAL_JOGOS?"VISUALIZACAO DOS JOGOS":
+                              modal==MODAL_WALLPAPERS?"WALLPAPERS":
                               modal==MODAL_CUSTOMIZACAO?"CUSTOMIZAÇÃO":
                               "CONFIGURAÇÕES";
         ui_texto_desenhar(cabecalho,painel.x+20,painel.y+17,2,tinta,
@@ -2158,6 +2163,35 @@ void ui_menu_desenhar(void) {
                 default: snprintf(nome,sizeof(nome),"Voltar"); break;
                 }
                 break;
+            case MODAL_WALLPAPERS: {
+                selecionado=opcao_wallpapers==i;
+                const ConsoleConfig *c=console_selecionado();
+                switch(i) {
+                case 0:
+                    if(wallpaper_escopo_console && c)
+                        snprintf(nome,sizeof(nome),
+                                 "Aplicar somente em: %s",c->nome);
+                    else snprintf(nome,sizeof(nome),
+                                  "Aplicar para: Todos os consoles");
+                    break;
+                case 1:
+                    snprintf(nome,sizeof(nome),
+                             "Escolher wallpaper (PNG / JPG / GIF)");
+                    break;
+                case 2:
+                    snprintf(nome,sizeof(nome),"%s",
+                        wallpaper_escopo_console && c
+                        ? "Usar wallpaper universal neste console"
+                        : "Restaurar wallpaper universal padrao");
+                    break;
+                case 3:
+                    snprintf(nome,sizeof(nome),"GIFs animados: %s",
+                             wallpapers_animados?"Ligados":"Desligados");
+                    break;
+                default: snprintf(nome,sizeof(nome),"Voltar");
+                }
+                break;
+            }
             case MODAL_CUSTOMIZACAO:
                 selecionado=opcao_aparencia==i;
                 switch(i) {
@@ -2168,8 +2202,7 @@ void ui_menu_desenhar(void) {
                     snprintf(nome,sizeof(nome),"Cor dos titulos: %s",
                              nomes_modos_texto[modo_texto]);
                     break;
-                case 4: snprintf(nome,sizeof(nome),"Escolher wallpaper"); break;
-                case 5: snprintf(nome,sizeof(nome),"Restaurar wallpaper padrao"); break;
+                case 4: snprintf(nome,sizeof(nome),"Wallpapers"); break;
                 default: snprintf(nome,sizeof(nome),"Voltar"); break;
                 }
                 break;
