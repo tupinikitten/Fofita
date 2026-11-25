@@ -1123,6 +1123,69 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
         }
         return MENU_ACAO_NENHUMA;
     }
+    if (tela_wallpapers) {
+        if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) {
+            tela_wallpapers=0;
+        } else if(tecla==SDLK_UP) {
+            opcao_wallpapers=(opcao_wallpapers+TOTAL_OPCOES_WALLPAPERS-1)
+                              %TOTAL_OPCOES_WALLPAPERS;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla==SDLK_DOWN) {
+            opcao_wallpapers=(opcao_wallpapers+1)%TOTAL_OPCOES_WALLPAPERS;
+            ui_som_tocar(UI_SOM_NAVEGACAO);
+        } else if(tecla_confirmar(tecla) || tecla==SDLK_RIGHT) {
+            if(opcao_wallpapers!=TOTAL_OPCOES_WALLPAPERS-1)
+                ui_som_tocar(UI_SOM_TROCA);
+            switch(opcao_wallpapers) {
+            case 0:
+                if(console_selecionado())
+                    wallpaper_escopo_console=!wallpaper_escopo_console;
+                else ui_menu_aviso("Nenhum console ativo");
+                salvar_config();
+                break;
+            case 1: {
+                listar_wallpapers();
+                const ConsoleConfig *c=console_selecionado();
+                const char *desejado=wallpaper_escopo_console && c
+                    ? wallpaper_do_console(c) : wallpaper_universal;
+                preview_indice=0;
+                for(int i=0;i<total_wallpapers;++i)
+                    if(!strcmp(desejado,wallpapers[i])) {
+                        preview_indice=i;
+                        break;
+                    }
+                preview_custom_path[0]='\0';
+                if(preview_textura) SDL_DestroyTexture(preview_textura);
+                preview_textura=total_wallpapers
+                    ? IMG_LoadTexture(renderer,wallpapers[preview_indice]) : NULL;
+                if(total_wallpapers) tela_previa_wallpaper=1;
+                else ui_menu_aviso("Adicione PNG, JPG ou GIF em ui/wallpapers/");
+                break;
+            }
+            case 2:
+                if(wallpaper_escopo_console && console_selecionado()) {
+                    definir_wallpaper_console(console_selecionado()->id,NULL);
+                    sincronizar_wallpaper_console();
+                    ui_menu_aviso("Console usa novamente o wallpaper universal");
+                } else {
+                    atualizar_wallpaper("ui/wallpapers/bk-01.jpg",0);
+                    ui_menu_aviso("Wallpaper universal restaurado");
+                }
+                salvar_config();
+                break;
+            case 3:
+                wallpapers_animados=!wallpapers_animados;
+                if(wallpaper_path[0])
+                    ui_wallpaper_carregar(renderer,wallpaper_path,wallpapers_animados);
+                salvar_config();
+                break;
+            case 4:
+                tela_wallpapers=0;
+                break;
+            }
+        }
+        return MENU_ACAO_NENHUMA;
+    }
     if (tela_aparencia) {
         if(tecla==SDLK_ESCAPE || tecla==SDLK_LEFT) tela_aparencia=0;
         else if(tecla==SDLK_UP) {
@@ -1152,17 +1215,10 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 modo_texto=(ModoTexto)((modo_texto+1)%3);
                 break;
             case 4:
-                listar_wallpapers();
-                preview_indice=wallpaper_indice;
-                preview_custom_path[0]='\0';
-                if(preview_textura) SDL_DestroyTexture(preview_textura);
-                preview_textura=total_wallpapers
-                    ? IMG_LoadTexture(renderer,wallpapers[preview_indice]) : NULL;
-                if(total_wallpapers) tela_previa_wallpaper=1;
-                else ui_menu_aviso("Nenhum wallpaper disponivel");
+                tela_wallpapers=1;
+                opcao_wallpapers=0;
                 break;
-            case 5: atualizar_wallpaper("ui/wallpapers/bk-01.jpg",1); break;
-            case 6: tela_aparencia=0; break;
+            case 5: tela_aparencia=0; break;
             }
             salvar_config();
         }
@@ -1431,7 +1487,8 @@ MenuAcao ui_menu_clique(int mx,int my) {
 void ui_menu_rolagem(int direcao) {
     if(ui_cards_editando() || tela_previa_wallpaper ||
        tela_aparencia || tela_configuracoes || tela_estilo_lateral ||
-       tela_estilo_consoles || tela_visualizacao || !direcao) return;
+       tela_estilo_consoles || tela_visualizacao || tela_wallpapers ||
+       !direcao) return;
     foco=FOCO_CARROSSEL;
     if(direcao>0) mover_carousel_esquerda();
     else mover_carousel_direita();
@@ -1998,7 +2055,13 @@ void ui_menu_desenhar(void) {
             int w,h; SDL_QueryTexture(preview_textura,NULL,NULL,&w,&h);
             desenhar_encaixado(preview_textura,w,h,(SDL_Rect){caixa.x+20,caixa.y+25,420,225},255);
         }
-        ui_texto_desenhar_centro("<  PREVIA DO WALLPAPER  >",vw/2,caixa.y+258,1,(SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0});
+        char cabecalho_previa[128];
+        const ConsoleConfig *c=console_selecionado();
+        snprintf(cabecalho_previa,sizeof(cabecalho_previa),
+                 "WALLPAPER: %s",
+                 wallpaper_escopo_console && c?c->id:"UNIVERSAL");
+        ui_texto_desenhar_centro(cabecalho_previa,vw/2,caixa.y+258,1,
+                 (SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0});
         ui_texto_desenhar_centro("ENTER Aplicar   ESC Cancelar",vw/2,caixa.y+284,1,(SDL_Color){220,225,235,255},(SDL_Color){0,0,0,0});
     } else if(menu_modal_atual()!=MODAL_NENHUM) {
         const MenuModal modal=menu_modal_atual();
