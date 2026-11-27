@@ -161,6 +161,23 @@ O seletor de console de referência funciona como filtro de catálogo, não como
 
 Aprovadas todas as alternativas exceto esticamento convencional. Widescreen adaptativo é responsabilidade do motor visual; widescreen aprimorado depende das capacidades do core e, quando necessário, da ROM/patch específico. Não anunciar suporte nativo sem validação. Desabilitar opção aprimorada quando indisponível, com fallback para proporção original. Não modificar ROMs automaticamente.
 
+## Escopo final inicial e sequência de implementação
+
+Decisão mais recente: somente um overlay especial, Sombra LCD, além de Nenhum. Reproduzir sombra interna nas bordas do painel DMG conforme referência enviada em 27/11/2026. Avaliar primeiro o air-gap drop shadow do Brickboy; se suficiente, expor seu parâmetro sem duplicar a sombra com PNG. Caso necessário, criar camada independente ajustada à abertura da tela. Não adicionar reflexos, sujeira ou outros overlays até novas referências aprovadas. Catálogo dos demais consoles inicialmente oferece Nenhum; filtro Todos permite escolha manual quando tecnicamente compatível. Esta decisão substitui sugestões anteriores de overlays adicionais.
+
+Sequência de builds pequenas:
+1. V2.0: verificar HEAD e integração atual; reproduzir serrilhamento da sidebar e frames, corrigir isoladamente, validar regressões em 720p/1080p e escala fracionária.
+2. V2.1: separar game_video.c/h, manter comportamento atual, testar NES/GB/GBC, áudio, controles, retorno ao menu e preferências.
+3. V2.2: protótipo GPU/Slang, avaliar librashader e alternativas, licenças, dependências Windows, caminho Switch; primeiro shader passthrough e fallback.
+4. V2.3: Sharp Bilinear e widescreen adaptativo não linear; preservar original e pixels quadrados, sem esticamento convencional. Widescreen aprimorado somente com suporte comprovado do core/jogo.
+5. V4.1: DMG Brickboy, três paletas especiais (DMG Original, Verde clássico, Pocket frio), cores originais, grade, persistência e sombra LCD opcional.
+6. V4.2: Pixel Transparency condicionado à licença; LCD Limpo; CRT Clássico com curvatura opcional. Validar cada preset separadamente.
+7. V3/V5: frames minimalistas GB/GBC/GBA e depois CRT, composição e presets JSON; sem reduzir área útil desnecessariamente.
+8. V7: editor simples/avançado com prévia real, filtro de catálogo por console e Todos, escolhas cruzadas, salvar/aplicar/cancelar e persistência.
+9. Validação integrada Windows e posteriormente Switch real. Busca automática de artes permanece no backlog independente.
+
+Não avançar uma etapa que introduza regressão sem correção ou fallback. Cada entrega deve indicar commit, build, testes automatizados e checklist manual. A ordem acima prevalece sobre a numeração histórica do roadmap quando houver divergência.
+
 ## Documentos relacionados
 
 - [Plano do frontend e integração Git](https://github.com/tupinikitten/Fofita/blob/feature/ui-views-linux-preview/docs/PLANO_FRONTEND_E_INTEGRACAO_GIT.md)
