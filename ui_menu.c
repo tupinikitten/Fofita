@@ -503,10 +503,14 @@ static SDL_Texture *icone_textura_preparada(const char *caminho,
     }
     return tex;
 }
-/* A barra lateral conserva sua textura intermediaria compacta de ate 64px. */
+/* Os icones da lateral sao reduzidos por media de area direto para o tamanho
+   em que aparecem (px fisicos), evitando uma segunda reducao na tela. */
+static int lado_textura_lateral=64;
+static float escala_fisica_ui(void);
 static SDL_Texture *icone_textura_suavizada(const char *caminho,
                                            const SDL_Color *tingir) {
-    return icone_textura_preparada(caminho,tingir,64,64,NULL,NULL);
+    return icone_textura_preparada(caminho,tingir,lado_textura_lateral,
+                                   lado_textura_lateral,NULL,NULL);
 }
 static SDL_Texture *carregar_icone_tingido(const char *caminho,SDL_Color cor) {
     return icone_textura_suavizada(caminho,&cor);
@@ -656,6 +660,7 @@ static void carregar_icones_preset(void) {
     const char *pasta=preset==PRESET_LIGHT?"light":
                       preset==PRESET_DARK?"dark":"colorful";
     const int custom=pacote_usuario_selecionado[0]!='\0';
+    lado_textura_lateral=(int)lroundf(SIDEBAR_ICON*escala_fisica_ui());
     for(int i=0;i<TOTAL_ACOES_LATERAIS;++i) {
         if(icones_laterais[i]) {
             SDL_DestroyTexture(icones_laterais[i]);
@@ -1549,7 +1554,8 @@ static void contorno(SDL_Rect r, int espessura, SDL_Color c) {
    Cache de geometrias evita reconstruir os paineis a cada frame. */
 #define LIMITE_CACHE_ARREDONDADO 96
 typedef struct {
-    int w, h, raio, borda;
+    int w, h;
+    float raio, borda;
     SDL_Color cor;
     SDL_Texture *tex;
 } EntradaArredondado;
@@ -1560,16 +1566,23 @@ static int proximo_cache_arredondado=0;
 static float limite01(float n) {
     return n<0.0f?0.0f:(n>1.0f?1.0f:n);
 }
-static float cobertura_arredondada(float px,float py,int largura,int altura,int raio) {
-    float mx=largura*0.5f, my=altura*0.5f;
+/* Distancia com sinal ate a borda de um retangulo arredondado (negativa
+   dentro). */
+static float distancia_retangulo_arredondado(float px,float py,float w,float h,
+                                             float raio) {
+    float mx=w*0.5f,my=h*0.5f;
     float dx=fabsf(px-mx)-(mx-raio);
     float dy=fabsf(py-my)-(my-raio);
-    float dx_externo=dx>0.0f?dx:0.0f;
-    float dy_externo=dy>0.0f?dy:0.0f;
-    float externo=sqrtf(dx_externo*dx_externo+dy_externo*dy_externo);
-    float interno=fminf(fmaxf(dx,dy),0.0f);
-    float distancia=externo+interno-raio;
-    return limite01(0.5f-distancia);
+    float fx=dx>0.0f?dx:0.0f,fy=dy>0.0f?dy:0.0f;
+    return sqrtf(fx*fx+fy*fy)+fminf(fmaxf(dx,dy),0.0f)-raio;
+}
+/* Pixels reais por pixel logico. O menu usa 1280x720 logicos, ampliados pelo
+   SDL para o tamanho da janela. */
+static float escala_fisica_ui(void) {
+    float sx=1.0f,sy=1.0f;
+    SDL_RenderGetScale(renderer,&sx,&sy);
+    float s=fminf(sx,sy);
+    return s>0.0f?s:1.0f;
 }
 static void limpar_cache_arredondado(void) {
     for(int i=0;i<total_cache_arredondado;++i) {
@@ -1578,7 +1591,8 @@ static void limpar_cache_arredondado(void) {
     }
     total_cache_arredondado=proximo_cache_arredondado=0;
 }
-static SDL_Texture *textura_arredondada(int w,int h,int raio,SDL_Color cor,int borda) {
+/* Todas as medidas aqui sao em pixels fisicos. borda=0 preenche a forma. */
+static SDL_Texture *textura_arredondada(int w,int h,float raio,SDL_Color cor,float borda) {
     for(int i=0;i<total_cache_arredondado;++i) {
         EntradaArredondado *e=&cache_arredondados[i];
         if(e->w==w && e->h==h && e->raio==raio && e->borda==borda &&
@@ -1587,16 +1601,17 @@ static SDL_Texture *textura_arredondada(int w,int h,int raio,SDL_Color cor,int b
     SDL_Surface *superficie=SDL_CreateRGBSurfaceWithFormat(0,w,h,32,SDL_PIXELFORMAT_RGBA32);
     if(!superficie) return NULL;
     if(SDL_LockSurface(superficie)!=0) {SDL_FreeSurface(superficie);return NULL;}
-    int interno_w=w-2*borda, interno_h=h-2*borda;
-    int interno_raio=raio-borda;
-    if(interno_raio<0) interno_raio=0;
+    float interno_w=w-2.0f*borda, interno_h=h-2.0f*borda;
+    float interno_raio=fmaxf(raio-borda,0.0f);
     for(int y=0;y<h;++y) {
         Uint32 *linha=(Uint32*)((Uint8*)superficie->pixels+y*superficie->pitch);
         for(int x=0;x<w;++x) {
             float px=x+0.5f, py=y+0.5f;
-            float cobertura=cobertura_arredondada(px,py,w,h,raio);
-            if(borda>0 && interno_w>0 && interno_h>0) {
-                float interior=cobertura_arredondada(px-borda,py-borda,interno_w,interno_h,interno_raio);
+            float cobertura=limite01(0.5f-distancia_retangulo_arredondado(
+                                           px,py,(float)w,(float)h,raio));
+            if(borda>0.0f && interno_w>0.0f && interno_h>0.0f) {
+                float interior=limite01(0.5f-distancia_retangulo_arredondado(
+                    px-borda,py-borda,interno_w,interno_h,interno_raio));
                 cobertura=limite01(cobertura-interior);
             }
             Uint8 alpha=(Uint8)(cor.a*cobertura+0.5f);
@@ -1608,6 +1623,9 @@ static SDL_Texture *textura_arredondada(int w,int h,int raio,SDL_Color cor,int b
     SDL_FreeSurface(superficie);
     if(!tex) return NULL;
     SDL_SetTextureBlendMode(tex,SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+    SDL_SetTextureScaleMode(tex,SDL_ScaleModeLinear);
+#endif
     int indice;
     if(total_cache_arredondado<LIMITE_CACHE_ARREDONDADO) indice=total_cache_arredondado++;
     else {
@@ -1617,14 +1635,23 @@ static SDL_Texture *textura_arredondada(int w,int h,int raio,SDL_Color cor,int b
     cache_arredondados[indice]=(EntradaArredondado){w,h,raio,borda,cor,tex};
     return tex;
 }
-static void arredondado(SDL_Rect a,int raio,SDL_Color cor,int borda) {
+/* Recebe medidas logicas, mas gera a textura no tamanho em que ela aparece na
+   tela. Assim a curva nao e ampliada depois (causa do serrilhamento). */
+static void arredondado_traco(SDL_Rect a,int raio,SDL_Color cor,float borda) {
     if(a.w<=0 || a.h<=0) return;
     if(raio>a.w/2) raio=a.w/2;
     if(raio>a.h/2) raio=a.h/2;
     if(raio<0) raio=0;
-    if(borda<0) borda=0;
-    SDL_Texture *tex=textura_arredondada(a.w,a.h,raio,cor,borda);
+    if(borda<0.0f) borda=0.0f;
+    const float s=escala_fisica_ui();
+    int w=(int)lroundf(a.w*s), h=(int)lroundf(a.h*s);
+    if(w<1) w=1;
+    if(h<1) h=1;
+    SDL_Texture *tex=textura_arredondada(w,h,raio*s,cor,borda*s);
     if(tex) SDL_RenderCopy(renderer,tex,NULL,&a);
+}
+static void arredondado(SDL_Rect a,int raio,SDL_Color cor,int borda) {
+    arredondado_traco(a,raio,cor,(float)borda);
 }
 static void desenhar_capsula(SDL_Rect r,SDL_Color fundo,SDL_Color borda) {
     arredondado(r,r.h/2,fundo,0);
@@ -1875,58 +1902,15 @@ static void desenhar_icone_fallback(int indice,SDL_Rect caixa,SDL_Color cor) {
     }
 }
 
-/* Contorno por linhas e arcos: nao depende da mascara RGBA da textura
-   arredondada, que em alguns backends cobria a legenda selecionada. */
-/* Contorno anti-aliased de dois pixels logicos, sem preenchimento.
-   Usa cobertura subpixel da textura ja existente (apenas a borda).
-   Os preenchimentos escuros antigos foram removidos dos itens e modais. */
-/* Distancia com sinal ate a borda de um retangulo arredondado (negativa
-   dentro). Mesmo calculo de cobertura_arredondada, mas em float. */
-static float distancia_retangulo_arredondado(float px,float py,float w,float h,
-                                             float raio) {
-    float mx=w*0.5f,my=h*0.5f;
-    float dx=fabsf(px-mx)-(mx-raio);
-    float dy=fabsf(py-my)-(my-raio);
-    float fx=dx>0.0f?dx:0.0f,fy=dy>0.0f?dy:0.0f;
-    return sqrtf(fx*fx+fy*fy)+fminf(fmaxf(dx,dy),0.0f)-raio;
-}
-
-/* Contorno anti-aliased, SEM preenchimento: cada pixel recebe alfa pela
-   cobertura do anel (borda externa menos borda interna), entao nao ha
-   falhas nos cantos nem trechos "tracejados". Desenha somente pontos da
-   propria borda; o miolo nunca e tocado. Espessura em pixels logicos. */
+/* Contorno anti-aliased, sem preenchimento. Usa a mesma textura em resolucao
+   fisica dos paineis; desenhar ponto a ponto em coordenadas logicas fazia cada
+   ponto virar um bloco quando a janela era ampliada. Espessura em px logicos. */
 #define ESPESSURA_SIDEBAR 1.8f  /* ~traco dos icones: ~30px/512 * 29px */
 static void contorno_selecao_esp(SDL_Rect r,int raio,SDL_Color cor,float esp) {
     if(r.w<=2 || r.h<=2) return;
-    if(raio>r.w/2) raio=r.w/2;
-    if(raio>r.h/2) raio=r.h/2;
     if(raio<2) raio=2;
-
     if(esp<1.0f) esp=1.0f;
-    float raio_f=(float)raio;
-    float raio_in=raio_f-esp;
-    if(raio_in<0.0f) raio_in=0.0f;
-    float w_in=(float)r.w-2.0f*esp,h_in=(float)r.h-2.0f*esp;
-
-    SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
-    for(int y=0;y<r.h;++y) {
-        for(int x=0;x<r.w;++x) {
-            float px=x+0.5f,py=y+0.5f;
-            float ext=limite01(0.5f-distancia_retangulo_arredondado(
-                                         px,py,(float)r.w,(float)r.h,raio_f));
-            if(ext<=0.0f) continue;
-            float inte=0.0f;
-            if(w_in>0.0f && h_in>0.0f)
-                inte=limite01(0.5f-distancia_retangulo_arredondado(
-                                       px-esp,py-esp,w_in,h_in,raio_in));
-            float cobertura=limite01(ext-inte);
-            Uint8 a=(Uint8)(cor.a*cobertura+0.5f);
-            if(a==0) continue;
-            SDL_SetRenderDrawColor(renderer,cor.r,cor.g,cor.b,a);
-            SDL_RenderDrawPoint(renderer,r.x+x,r.y+y);
-        }
-    }
-    SDL_SetRenderDrawColor(renderer,255,255,255,255);
+    arredondado_traco(r,raio,cor,esp);
 }
 
 /* Demais usos (modais/listas) mantem o traco fino de antes. */
@@ -1939,6 +1923,9 @@ static void desenhar_sidebar(int vh) {
     SDL_Rect painel;
     int lista_y=0,h_item=0;
     obter_geometria_sidebar(vh,&painel,&lista_y,&h_item,NULL);
+    /* Janela redimensionada ou tela cheia: refazer os icones na nova escala. */
+    if(lado_textura_lateral!=(int)lroundf(SIDEBAR_ICON*escala_fisica_ui()))
+        carregar_icones_preset();
     /* Vidro opcional: os icones podem flutuar diretamente no wallpaper. */
     SDL_Color vidro = preset==PRESET_LIGHT
         ? (SDL_Color){25,37,73,142}

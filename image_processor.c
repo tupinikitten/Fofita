@@ -9,9 +9,10 @@
    (diferenca de ate 5%) o pequeno excesso e recortado. */
 #define TOLERANCIA_PROPORCAO_AUTO 0.05f
 
-/* Arredonda os dois cantos inferiores da etiqueta com bordas suaves:
-   o alfa de cada pixel vira a cobertura dele dentro do arco (0 a 255). */
-static void aplicar_mascara_cantos_inferiores(SDL_Surface *surface, int raio) {
+/* Arredonda os dois cantos de cima (topo=1) ou de baixo (topo=0) da etiqueta
+   com bordas suaves: o alfa de cada pixel vira a cobertura dele dentro do
+   arco (0 a 255). */
+static void aplicar_mascara_cantos(SDL_Surface *surface, int raio, int topo) {
     if (!surface || surface->format->BytesPerPixel != 4 || raio <= 0)
         return;
 
@@ -24,7 +25,10 @@ static void aplicar_mascara_cantos_inferiores(SDL_Surface *surface, int raio) {
     if (SDL_LockSurface(surface) != 0)
         return;
 
-    for (int y = h - raio; y < h; ++y) {
+    int primeira = topo ? 0 : h - raio;
+    float cy = topo ? (float)raio : (float)(h - raio);
+
+    for (int y = primeira; y < primeira + raio; ++y) {
         for (int x = 0; x < w; ++x) {
             float cx;
             if (x < raio) cx = (float)raio;
@@ -32,7 +36,7 @@ static void aplicar_mascara_cantos_inferiores(SDL_Surface *surface, int raio) {
             else continue;
 
             float dx = (x + 0.5f) - cx;
-            float dy = (y + 0.5f) - (float)(h - raio);
+            float dy = (y + 0.5f) - cy;
             float cobertura = (float)raio - sqrtf(dx * dx + dy * dy) + 0.5f;
             if (cobertura >= 1.0f) continue;
             if (cobertura < 0.0f) cobertura = 0.0f;
@@ -248,8 +252,8 @@ SDL_Texture *image_processor_load_cover(
         SDL_FreeSurface(arte);
     }
 
-    aplicar_mascara_cantos_inferiores(
-        etiqueta, console->raio_cantos_inferiores);
+    aplicar_mascara_cantos(etiqueta, console->raio_cantos_inferiores, 0);
+    aplicar_mascara_cantos(etiqueta, console->raio_cantos_superiores, 1);
 
     SDL_SetSurfaceBlendMode(etiqueta, SDL_BLENDMODE_BLEND);
 
