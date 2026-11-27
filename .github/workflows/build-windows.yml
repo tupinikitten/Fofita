@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           gcc -std=gnu11 -O2 -Wall -Wextra -o Fofita.exe ./*.c \
-            $(pkg-config --cflags --libs sdl2 SDL2_image) -lm
+            $(pkg-config --cflags --libs sdl2 SDL2_image) -lopengl32 -lm
           test -s Fofita.exe
 
       - name: Montar pacote Windows com bibliotecas

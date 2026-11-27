@@ -1,4 +1,5 @@
 #include "game_video.h"
+#include "shader_manager.h"
 #include "video_audio.h"
 #include <string.h>
 
@@ -8,6 +9,7 @@ float proporcao_video = 0.0f;
 int video_escala = 0, video_filtro = 0, video_proporcao = 0;
 
 void descartar_textura_jogo(void) {
+    shader_fechar();
     if (textura_jogo) {
         SDL_DestroyTexture(textura_jogo);
         textura_jogo = NULL;
@@ -34,7 +36,9 @@ void retro_video_refresh_cb(const void *data, unsigned width, unsigned height, s
                 SDL_Log("Nao foi possivel ativar escala nearest: %s", SDL_GetError());
 #endif
         }
-        SDL_UpdateTexture(textura_jogo, NULL, data, (int)pitch);
+        int shader_pitch = 0;
+        const void *processed = shader_processar(data, (int)width, (int)height, (int)pitch, formato_de_cor, &shader_pitch);
+        SDL_UpdateTexture(textura_jogo, NULL, processed ? processed : data, processed ? shader_pitch : (int)pitch);
     }
 }
 

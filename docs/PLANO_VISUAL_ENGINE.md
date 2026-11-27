@@ -192,3 +192,7 @@ Serrilhamento corrigido conforme retorno da usuária. Adiar normalização do ta
 ### Validação V2.1
 
 Build cdafdf7: testes manuais aprovados pela usuária em 27/11/2026, incluindo redimensionamento. CI: success. Próxima etapa: V2.2, avaliação e protótipo do pipeline de shaders, preservando fallback SDL.
+
+### V2.2a — protótipo GPU
+
+Passagem GLSL 1.20 passthrough em contexto OpenGL separado, opt-in FOFITA_SHADER_TEST=1, retorno ao SDL em falha. Readback síncrono apenas para prova de conceito, não arquitetura final. Librashader/Slang e Switch ainda não integrados. Validar compilação e execução antes de avançar.
