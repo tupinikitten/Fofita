@@ -91,7 +91,7 @@ A indicação automática depende do console efetivamente identificado. A prefer
 Propostas iniciais, sujeitas a validação visual, com quatro tonalidades cada:
 - DMG Original: #D5CD49, #A2AB38, #586B25, #263C16.
 - Verde clássico: #C4E58B, #8CB85D, #487844, #183C25.
-- Pocket: #E0E4D6, #A5AE9D, #626C60, #252D27.
+- Pocket: #DCE5E3, #A3B2B4, #637378, #20292F (monocromático frio inspirado na referência fotográfica enviada; valores aproximados).
 
 Permitir paleta DMG em outros consoles por escolha explícita, com conversão de luminância quando necessária. Não limitar efeitos por ID de console. Manter recomendação automática e escolha manual independente; oferecer paleta original/sem conversão quando aplicável.
 
@@ -142,6 +142,10 @@ Seguir o protótipo apresentado anteriormente e confirmado pela usuária em 27/1
 - Oferecer salvar, aplicar, cancelar e restaurar; não alterar preferências definitivas ao experimentar a prévia.
 - Implementar após estabilizar pipeline de shaders, frames e primeiros presets; não expor controles sem efeito funcional.
 - Validar desempenho, fallback, persistência, troca de console e navegação por teclado, controle e mouse.
+
+### Filtro de recursos no editor de combos
+
+O seletor de console de referência funciona como filtro de catálogo, não como restrição de aplicação. Ao escolher GB, GBC, GBA, NES ou outro console, apresentar paletas, shaders, frames e overlays coerentes com a família selecionada. A opção Todos exibe o catálogo completo. Preservar escolhas existentes ao trocar o filtro; não substituir silenciosamente componentes do combo. Se uma escolha estiver fora do filtro, mantê-la identificada como selecionada. Frames e overlays são recursos independentes, com opção Nenhum. Paleta Pocket revisada para monocromático frio, inspirada na foto enviada, mantendo quatro tonalidades e três paletas especiais no total.
 
 ## Documentos relacionados
 
