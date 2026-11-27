@@ -23,6 +23,8 @@ static GLuint program, input, output, fbo;
 static unsigned char *rgba, *result;
 static size_t capacity;
 static int state, tw, th;
+int video_shader=0;
+int shader_falhou(void){return state<0 && video_shader; }
 static ShaderFn use_program, delete_shader, delete_program;
 static DeleteFn delete_fbo;
 static BindFn bind_fbo;
@@ -93,7 +95,7 @@ void shader_fechar(void){
     free(rgba);free(result);rgba=result=NULL;capacity=0;state=0;
 }
 const void *shader_processar(const void *data,int w,int h,int pitch,Uint32 format,int *out_pitch){
-    if(!state){const char *e=SDL_getenv("FOFITA_SHADER_TEST");if(!e||strcmp(e,"1")){state=-1;return NULL;}}
+    if(!video_shader) return NULL;
     if(state<0||!data||w<=0||h<=0||w>4096||h>4096||pitch<=0) return NULL;
     SDL_Window *oldwin=SDL_GL_GetCurrentWindow();
     SDL_GLContext old=SDL_GL_GetCurrentContext();

@@ -5,6 +5,7 @@
 #include "ui_game_view.h"
 #include "ui_cards.h"
 #include "video_audio.h"
+#include "shader_manager.h"
 #include "ui_wallpaper.h"
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
@@ -285,6 +286,8 @@ static void carregar_config(void) {
             int v=atoi(linha+13); if(v>=0 && v<=1) video_filtro=v;
         } else if (strncmp(linha,"video_proporcao=",16)==0) {
             int v=atoi(linha+16); video_proporcao=(v==1);
+        } else if (strncmp(linha,"video_shader=",13)==0) {
+            video_shader=(atoi(linha+13)==1);
         } else if (strncmp(linha,"game_view=",10)==0) {
             ui_game_view_set(strcmp(linha+10,"card")==0
                              ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
@@ -309,6 +312,7 @@ static void salvar_config(void) {
                 wallpapers_console[i].console,
                 wallpapers_console[i].caminho);
     fprintf(f,"video_escala=%d\nvideo_filtro=%d\nvideo_proporcao=%d\n",video_escala,video_filtro,video_proporcao);
+    fprintf(f,"video_shader=%d\n",video_shader);
     fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
     fprintf(f,"card_layout=%s\n",
             ui_card_layout_get()==CARD_LAYOUT_GRID?"grid":
@@ -1247,14 +1251,15 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 case 0: video_proporcao=(video_proporcao+1)%2; break;
                 case 1: video_escala=(video_escala+1)%3; break;
                 case 2: video_filtro=!video_filtro; break;
-                case 3: video_proporcao=video_escala=video_filtro=0; break;
-                case 4: tela_configuracoes=1; opcao_configuracoes=1; total_opcoes_config=3; break;
+                case 3: video_shader=!video_shader; break;
+                case 4: video_proporcao=video_escala=video_filtro=video_shader=0; break;
+                case 5: tela_configuracoes=1; opcao_configuracoes=1; total_opcoes_config=3; break;
                 }
                 salvar_config();
                 ui_som_tocar(UI_SOM_TROCA);
             } else switch(opcao_configuracoes) {
             case 0: mostrar_todos_consoles(); break;
-            case 1: tela_configuracoes=2; opcao_configuracoes=0; total_opcoes_config=5; break;
+            case 1: tela_configuracoes=2; opcao_configuracoes=0; total_opcoes_config=6; break;
             case 2: tela_configuracoes=0; break;
             }
         }
@@ -2220,7 +2225,8 @@ void ui_menu_desenhar(void) {
                     case 0: snprintf(nome,sizeof(nome),"Proporcao: %s",ratios[video_proporcao]); break;
                     case 1: snprintf(nome,sizeof(nome),"Balanceamento: %s",escalas[video_escala]); break;
                     case 2: snprintf(nome,sizeof(nome),"Filtragem: %s",video_filtro?"Suave":"Nitida"); break;
-                    case 3: snprintf(nome,sizeof(nome),"Restaurar padroes"); break;
+                    case 3: snprintf(nome,sizeof(nome),"Shader: %s",video_shader?"Passthrough (teste)":"Nenhum"); break;
+                    case 4: snprintf(nome,sizeof(nome),"Restaurar padroes"); break;
                     default: snprintf(nome,sizeof(nome),"Voltar"); break;
                     }
                 } else snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":i==1?"Video":"Voltar");

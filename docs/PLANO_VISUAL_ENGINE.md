@@ -200,3 +200,7 @@ Passagem GLSL 1.20 passthrough em contexto OpenGL separado, opt-in FOFITA_SHADER
 ### Validação V2.2a
 
 Testes manuais aprovados em 27/11/2026 com FOFITA_SHADER_TEST=1 e quatro mensagens de inicialização GPU passthrough. CI: success. Próximo: controle de shader no menu e avaliação librashader/Slang. Fallback em falha ainda não testado explicitamente; Switch e desempenho não validados.
+
+### V2.2b — seleção pelo menu
+
+Configurações > Video: Shader Nenhum/Passthrough (teste), persistência video_shader em fofita_menu.cfg, restaurar padrões desativa. Menu substitui variável de ambiente. Fallback mantém log existente; aviso visual de falha e teste forçado pendentes. Sem alteração de efeitos ou integração Slang nesta build.
