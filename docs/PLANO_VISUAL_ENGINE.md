@@ -204,3 +204,7 @@ Testes manuais aprovados em 27/11/2026 com FOFITA_SHADER_TEST=1 e quatro mensage
 ### V2.2b — seleção pelo menu
 
 Configurações > Video: Shader Nenhum/Passthrough (teste), persistência video_shader em fofita_menu.cfg, restaurar padrões desativa. Menu substitui variável de ambiente. Fallback mantém log existente; aviso visual de falha e teste forçado pendentes. Sem alteração de efeitos ou integração Slang nesta build.
+
+### Validação V2.2b
+
+Testes manuais aprovados pela usuária em 27/11/2026. Renomear entrada Video para Configurações de vídeo conforme solicitado.

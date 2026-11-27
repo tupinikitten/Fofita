@@ -2229,7 +2229,7 @@ void ui_menu_desenhar(void) {
                     case 4: snprintf(nome,sizeof(nome),"Restaurar padroes"); break;
                     default: snprintf(nome,sizeof(nome),"Voltar"); break;
                     }
-                } else snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":i==1?"Video":"Voltar");
+                } else snprintf(nome,sizeof(nome),"%s",i==0?"Restaurar consoles ocultos":i==1?"Configurações de vídeo":"Voltar");
                 break;
             default: break;
             }
