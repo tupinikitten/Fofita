@@ -7,7 +7,7 @@ Atualizado em 27/11/2026. Documento de planejamento, não declaração de implem
 - Simplicidade: poucas opções, bons padrões automáticos, sem reproduzir toda a complexidade do RetroArch.
 - Preservar a interface aprovada, a nitidez e a proporção original dos consoles.
 - Configurações > Vídeo do jogo concentra as opções de emulação; Customização permanece dedicada ao dashboard.
-- Duas opções de proporção fiel, mais Tela cheia 16:9 opcional: Original do console (padrão; NES 4:3, GBA 3:2, GB/GBC 10:9) e Pixels quadrados (resolução nativa). Não oferecer 4:3 forçado como terceira opção.
+- Modos de proporção fiel: Original do console (padrão; NES 4:3, GBA 3:2, GB/GBC 10:9) e Pixels quadrados (resolução nativa). Não oferecer 4:3 forçado como terceira opção.
 - Efeitos opcionais, desligáveis, com fallback simples e sem interferir em áudio, controles ou saves.
 - Não expor recursos incompletos nem prometer suporte ao Switch antes de testes reais.
 
@@ -109,7 +109,7 @@ Manter em **Configurações > Vídeo do jogo** (não em Customização do dashbo
 - **Visual:** Automático por console / Desligado / DMG Clássico / GBC Pixel Transparency / LCD Limpo / CRT Clássico (expor apenas presets implementados e validados, independentemente do console).
 - A escolha automática oferece DMG Clássico para GB, Pixel Transparency para GBC, LCD Limpo para GBA e CRT Clássico para consoles de TV **apenas depois de cada preset ser validado**; enquanto isso, fallback sem shader.
 - **Tela curva:** opção contextual dentro do CRT, desligada inicialmente.
-- Conservar Original do console e Pixels quadrados como modos fiéis; adicionar Tela cheia 16:9 opcional conforme seção abaixo. Não multiplicar filtros, paletas e efeitos independentes no menu principal.
+- Conservar Original do console e Pixels quadrados; investigar widescreen adaptativo e aprimorado, sem esticamento convencional. Não multiplicar filtros, paletas e efeitos independentes no menu principal.
 - Persistir preferência global e, quando necessário, exceção por console; preservar preferência manual, restaurar padrões e impedir apenas efeitos tecnicamente incompatíveis, nunca restringir por família de console.
 
 ### Dependências, licença e limites
@@ -150,12 +150,16 @@ O seletor de console de referência funciona como filtro de catálogo, não como
 ## Complemento — tela cheia e frames minimalistas (27/11/2026)
 
 - Consenso: frames inspirados apenas na moldura física da tela, não na carcaça com controles. Priorizar GB, GBC e GBA; posteriormente molduras inspiradas em televisões CRT para consoles de mesa. Aproveitar margens da tela 16:9 do Switch, preservar área útil e proporção, permitir desativar frame e overlay separadamente. GBA pode usar logotipo inferior; GB/GBC podem usar logotipo lateral e indicador de energia, conforme referências fornecidas. Testar 720p/1080p.
-- Nova proposta de proporção: Original do console (padrão), Pixels quadrados e Tela cheia 16:9 (esticar, sem recortar HUD). Esta terceira opção revisa a decisão anterior de apenas dois modos; não reintroduzir 4:3 forçado. Frames devem ser desativados ou adaptados quando não houver margem livre, sem cobrir conteúdo.
+- Decisão revisada: Original do console (padrão), Pixels quadrados, Widescreen adaptativo (16:9 não linear) e Widescreen aprimorado/nativo quando core e jogo suportarem. Excluir esticamento convencional e 4:3 forçado. Frames devem ser desativados ou adaptados quando não houver margem livre, sem cobrir conteúdo.
 - Investigar widescreen aprimorado por core/jogo, distinto do esticamento do frontend. Priorizar suporte nativo quando disponível; para SNES avaliar bsnes-hd beta, Mode 7 e configurações/patches específicos por jogo. Não alterar ROM original automaticamente. Não prometer compatibilidade universal ou desempenho no Switch.
 - Avaliar escala não linear como alternativa experimental, mantendo centro menos distorcido à custa das laterais; não confundir com expansão real do campo de visão. Sharp Bilinear melhora amostragem, não corrige geometria.
-- Se widescreen aprimorado não estiver disponível, manter proporção original ou usar esticamento somente por escolha explícita. Preservar preferências por jogo/console quando implementadas.
+- Se widescreen aprimorado não estiver disponível, manter proporção original ou oferecer widescreen adaptativo por escolha explícita; nunca esticamento convencional. Preservar preferências por jogo/console quando implementadas.
 - Referências consultadas: [Retro Game Corps — Widescreen SNES Guide](https://retrogamecorps.com/2023/02/22/widescreen-snes-guide/) e [RetroArch Emu — Aspect Ratio and Screen Fill](https://retroarchemu.gitlab.io/how-can-i-get-the-game-to-fill-the-screen-and-play-in-169-in-retroarch/). O primeiro descreve suporte específico de bsnes-hd e ressalvas de desempenho/compatibilidade; o segundo é referência geral, não documentação oficial de capacidades de cores.
 - Aceite: comparar geometria original e 16:9, legibilidade, ausência de recorte, interação com shaders/frames, fallback e desempenho. Recursos ainda não implementados.
+
+## Decisão sobre widescreen
+
+Aprovadas todas as alternativas exceto esticamento convencional. Widescreen adaptativo é responsabilidade do motor visual; widescreen aprimorado depende das capacidades do core e, quando necessário, da ROM/patch específico. Não anunciar suporte nativo sem validação. Desabilitar opção aprimorada quando indisponível, com fallback para proporção original. Não modificar ROMs automaticamente.
 
 ## Documentos relacionados
 
