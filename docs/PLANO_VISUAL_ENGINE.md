@@ -196,3 +196,7 @@ Build cdafdf7: testes manuais aprovados pela usuária em 27/11/2026, incluindo r
 ### V2.2a — protótipo GPU
 
 Passagem GLSL 1.20 passthrough em contexto OpenGL separado, opt-in FOFITA_SHADER_TEST=1, retorno ao SDL em falha. Readback síncrono apenas para prova de conceito, não arquitetura final. Librashader/Slang e Switch ainda não integrados. Validar compilação e execução antes de avançar.
+
+### Validação V2.2a
+
+Testes manuais aprovados em 27/11/2026 com FOFITA_SHADER_TEST=1 e quatro mensagens de inicialização GPU passthrough. CI: success. Próximo: controle de shader no menu e avaliação librashader/Slang. Fallback em falha ainda não testado explicitamente; Switch e desempenho não validados.
