@@ -39,9 +39,9 @@ static const ConsoleConfig consoles[] = {
     /* GB: cartucho em x=32..698; etiqueta em x=118..611, y=252..689,
        com os quatro cantos arredondados. */
     {"gb", "Game Boy", ext_gb, sizeof(ext_gb)/sizeof(ext_gb[0]), "roms/gb", "labels/gb", "assets/gb/body/cartridge_base.png", 730,835, 118,252,493,437, CAPA_AUTO, 18, "cores/gambatte_libretro.dll", "ui/consoles/gb_icon.png", 18},
-    /* GBC: PROVISORIO, com as medidas do GB. Conferir quando o PNG do molde
-       for adicionado; enquanto ele nao existir, o GBC aparece como card. */
-    {"gbc", "Game Boy Color", ext_gbc, sizeof(ext_gbc)/sizeof(ext_gbc[0]), "roms/gbc", "labels/gbc", "assets/gbc/body/cartridge_base.png", 730,835, 118,252,493,437, CAPA_AUTO, 18, "cores/gambatte_libretro.dll", "ui/consoles/gbc_icon.png", 18},
+    /* GBC: cartucho em x=40..689; etiqueta no painel central, em x=131..598,
+       y=282..709, com os quatro cantos arredondados. */
+    {"gbc", "Game Boy Color", ext_gbc, sizeof(ext_gbc)/sizeof(ext_gbc[0]), "roms/gbc", "labels/gbc", "assets/gbc/body/cartridge_base.png", 730,835, 131,282,468,428, CAPA_AUTO, 19, "cores/gambatte_libretro.dll", "ui/consoles/gbc_icon.png", 19},
     {"gba", "Game Boy Advance", ext_gba, sizeof(ext_gba)/sizeof(ext_gba[0]), "roms/gba", "assets/gba", "templates/gba_template.png", 400,400, 60,120,280,150, CAPA_CONTAIN, 0, NULL, "ui/consoles/gba_icon.png", 0},
     {"n64", "Nintendo 64", ext_n64, sizeof(ext_n64)/sizeof(ext_n64[0]), "roms/n64", "assets/n64", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, NULL, 0},
     {"nds", "Nintendo DS", ext_ds, sizeof(ext_ds)/sizeof(ext_ds[0]), "roms/nds", "assets/nds", NULL, 400,400, 0,0,0,0, CAPA_CONTAIN, 0, NULL, "ui/consoles/ds_icon.png", 0},
