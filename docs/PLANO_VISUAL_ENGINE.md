@@ -39,6 +39,30 @@ Referências verificadas na revisão anterior: frontend 3f99dc6, backend 60ccdda
 
 Simplificar proporções para as duas opções aprovadas, migrando a antiga preferência 4:3 forçado para Original do console; verificar o balanceamento em diferentes tamanhos de janela e manter apenas opções com diferença útil. Preservar preferências e restauração. Avaliar a integração experimental separadamente, sem bloquear a evolução do Visual Engine.
 
+## Backlog futuro — preenchimento automático de artes
+
+Implementar após estabilizar a interface e o motor visual, em módulo independente (sugestão: artwork_manager.c/h), com integração ao frontend.
+
+- Fonte: [Libretro Thumbnails](https://github.com/libretro-thumbnails) e https://thumbnails.libretro.com/; mapear IDs dos consoles para os nomes das coleções.
+- Priorizar Named_Boxarts; Named_Snaps e Named_Titles são alternativas opcionais (telas de título, não necessariamente logos isolados).
+- Preservar artes locais/personalizadas; consultar apenas jogos sem arte, normalizar nomes e comparar região/versão sem substituir por correspondência ambígua.
+- Baixar sob demanda, em segundo plano, via HTTPS com validação TLS, timeout, limite de tamanho e validação de PNG; cache local e gravação temporária antes de renomear.
+- Atualizar o card sem bloquear o menu; manter placeholder se offline ou sem correspondência. Evitar tentativas repetidas e permitir desativar a busca automática.
+- Verificar termos de uso, direitos das imagens e limites do servidor antes de distribuir ou automatizar downloads. Não enviar ROMs.
+- Aceite: testar NES, GB e GBC, arte personalizada preservada, cache offline, falhas de rede e nomes ambíguos. Não é pré-requisito dos shaders.
+
+## Checklist de implementação dos shaders (V2–V6)
+
+1. Corrigir serrilhamento da UI separadamente; manter filtragem do jogo independente.
+2. Isolar game_video.c/h: entrada do frame libretro, proporção, escala, viewport e composição.
+3. Validar nearest e escala inteira/fracionária; avaliar Sharp Bilinear sem multiplicar opções.
+4. Avaliar backend GPU compatível com SDL2 (OpenGL no Windows como candidato) e librashader; verificar licenças, integração e caminho futuro para Switch. SDL_Renderer sozinho não oferece pipeline de shaders arbitrários.
+5. Criar pipeline mínimo: upload da textura, compilação de shader, uniforms de resolução de entrada/saída e tempo quando necessário, renderização e fallback sem efeito. Gerenciar recursos ao redimensionar/trocar jogo.
+6. Implementar LCD leve (grade de pixels e contraste), depois CRT simples (scanlines e máscara opcional); paleta DMG e ghosting leve como efeitos opcionais, este último exige histórico de frames. Evitar curvatura/bloom e multipass complexo inicialmente.
+7. Compor frame PNG/overlay após efeito do jogo, sem aplicar shader à interface; manter proporção e área útil.
+8. Expor poucos presets: Desligado (padrão), LCD, CRT; persistir preferências e restaurar padrões. Combo DMG Original após validação, com JSON simples.
+9. Testar NES/GB/GBC, escala 720p/1080p e fracionária, troca de jogo, retorno ao menu, FPS/latência, falha de shader e fallback. Switch exige validação em hardware real.
+
 ## Documentos relacionados
 
 - [Plano do frontend e integração Git](https://github.com/tupinikitten/Fofita/blob/feature/ui-views-linux-preview/docs/PLANO_FRONTEND_E_INTEGRACAO_GIT.md)
