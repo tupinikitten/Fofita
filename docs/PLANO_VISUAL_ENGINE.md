@@ -188,3 +188,7 @@ Não avançar uma etapa que introduza regressão sem correção ou fallback. Cad
 ## V2.1 — início da fundação
 
 Serrilhamento corrigido conforme retorno da usuária. Adiar normalização do tamanho visual dos ícones de fontes diferentes de 512x512 para o frontend. Extração do processamento de frames, textura, escala e proporção para game_video.c/h; manter SDL_Renderer e comportamento atual. Compilação e testes manuais pendentes.
+
+### Validação V2.1
+
+Build cdafdf7: testes manuais aprovados pela usuária em 27/11/2026, incluindo redimensionamento. CI: success. Próxima etapa: V2.2, avaliação e protótipo do pipeline de shaders, preservando fallback SDL.
