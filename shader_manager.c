@@ -36,6 +36,24 @@ static int init(void) {
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,&major);
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,&minor);
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,&profile);
+    /* Probe modern core context independently; keep the validated legacy renderer. */
+    SDL_Window *previous_window=SDL_GL_GetCurrentWindow();
+    SDL_GLContext previous_context=SDL_GL_GetCurrentContext();
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_Window *probe=SDL_CreateWindow("Fofita GL 3.3 probe",0,0,1,1,SDL_WINDOW_OPENGL|SDL_WINDOW_HIDDEN);
+    SDL_GLContext modern=probe?SDL_GL_CreateContext(probe):NULL;
+    if(modern){
+        GLint actual_major=0,actual_minor=0;
+        glGetIntegerv(GL_MAJOR_VERSION,&actual_major);
+        glGetIntegerv(GL_MINOR_VERSION,&actual_minor);
+        SDL_Log("Shader Slang probe: OpenGL %d.%d (%s)",actual_major,actual_minor,
+                actual_major>3||(actual_major==3&&actual_minor>=3)?"compativel":"insuficiente");
+        SDL_GL_DeleteContext(modern);
+    } else SDL_Log("Shader Slang probe: OpenGL 3.3 indisponivel");
+    if(probe) SDL_DestroyWindow(probe);
+    if(previous_context) SDL_GL_MakeCurrent(previous_window,previous_context);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,1);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,0);

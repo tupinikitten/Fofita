@@ -208,3 +208,7 @@ Configurações > Video: Shader Nenhum/Passthrough (teste), persistência video_
 ### Validação V2.2b
 
 Testes manuais aprovados pela usuária em 27/11/2026. Renomear entrada Video para Configurações de vídeo conforme solicitado.
+
+### V2.2c.1 — compatibilidade OpenGL moderna
+
+V2.2b e novo nome aprovados. Avaliada documentação oficial librashader v0.12.1: OpenGL 3.3+ e API C com loader dinâmico; release consultada sem assets. Primeiro testar contexto core 3.3 independente, registrar versão real e manter passthrough 2.1. Próximos: verificar licença e distribuição/build fixado, integrar API C e preset de teste; renderizar na resolução de saída, medir readback e avaliar Switch separadamente. Nenhuma DLL externa incluída nesta etapa.
