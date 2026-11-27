@@ -33,8 +33,8 @@ static const ConsoleConfig consoles[] = {
     /* Todos os moldes usam um canvas de 730x835, com o cartucho ocupando
        765 px de altura a partir de y=30. molde_w/molde_h DEVEM ser o tamanho
        real do PNG; off_x/off_y/label_w/label_h sao medidos nesse mesmo PNG.
-       NES: cartucho em x=24..713; etiqueta em x=304..623, y=30..554. */
-    {"nes", "Nintendo Entertainment System", ext_nes, sizeof(ext_nes)/sizeof(ext_nes[0]), "roms/nes", "labels/nes", "assets/nes/body/cartridge_base.png", 730,835, 304,30,319,524, CAPA_AUTO, 10, "cores/fceumm_libretro.dll", "ui/consoles/nes_icon.png", 0},
+       NES: cartucho em x=24..713; etiqueta em x=301..622, y=30..547. */
+    {"nes", "Nintendo Entertainment System", ext_nes, sizeof(ext_nes)/sizeof(ext_nes[0]), "roms/nes", "labels/nes", "assets/nes/body/cartridge_base.png", 730,835, 301,30,321,517, CAPA_AUTO, 9, "cores/fceumm_libretro.dll", "ui/consoles/nes_icon.png", 0},
     {"snes", "Super Nintendo", ext_snes, sizeof(ext_snes)/sizeof(ext_snes[0]), "roms/snes", "assets/snes", "templates/snes_template.png", 400,400, 40,100,320,220, CAPA_CONTAIN, 0, NULL, NULL, 0},
     /* GB: cartucho em x=32..698; etiqueta em x=118..611, y=252..689,
        com os quatro cantos arredondados. */
