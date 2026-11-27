@@ -130,6 +130,19 @@ Manter em **Configurações > Vídeo do jogo** (não em Customização do dashbo
 5. Desempenho, shaders quebrados, falta de GPU compatível e falha de carregamento resultam em fallback seguro.
 6. A UI do dashboard não recebe os shaders de jogo; telas, ícones e frames são tratados separadamente.
 
+## V7 — Editor de combos visuais (conceito aprovado)
+
+Seguir o protótipo apresentado anteriormente e confirmado pela usuária em 27/11/2026: prévia no topo, nome do combo, console de referência, paleta, efeito de tela, frame, overlay e controles de intensidade.
+
+- Modo simples: selecionar preset pronto, automático ou desligado; aplicar e restaurar padrões.
+- Modo avançado: criar/editar combo, escolher nome, console de referência (opcional, não restringe aplicação), paleta, shader, frame e overlay; mostrar apenas parâmetros relevantes ao efeito selecionado (grade LCD, persistência, scanlines, máscara, curvatura etc.).
+- Prévia em tempo real usando o pipeline real quando disponível; antes disso, identificar qualquer prévia ilustrativa como tal.
+- Ambos os modos usam a mesma estrutura de configuração JSON versionada; presets originais preservados, combos personalizados editáveis, duplicáveis e removíveis.
+- Permitir aplicar qualquer combo a qualquer console/jogo tecnicamente compatível; recomendação automática não é restrição.
+- Oferecer salvar, aplicar, cancelar e restaurar; não alterar preferências definitivas ao experimentar a prévia.
+- Implementar após estabilizar pipeline de shaders, frames e primeiros presets; não expor controles sem efeito funcional.
+- Validar desempenho, fallback, persistência, troca de console e navegação por teclado, controle e mouse.
+
 ## Documentos relacionados
 
 - [Plano do frontend e integração Git](https://github.com/tupinikitten/Fofita/blob/feature/ui-views-linux-preview/docs/PLANO_FRONTEND_E_INTEGRACAO_GIT.md)
