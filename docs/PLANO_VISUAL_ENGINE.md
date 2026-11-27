@@ -184,3 +184,7 @@ Não avançar uma etapa que introduza regressão sem correção ou fallback. Cad
 - [Plano do backend e segurança](https://github.com/tupinikitten/Fofita/blob/feature/ui-views-linux-preview/docs/PLANO_BACKEND_E_SEGURANCA.md)
 - [Savestates B2.2](https://github.com/tupinikitten/Fofita/blob/feature/backend-foundation/docs/B2_2_SAVESTATES.md)
 - [Wallpapers](https://github.com/tupinikitten/Fofita/blob/feature/ui-next/ui/wallpapers/README.md)
+
+## V2.1 — início da fundação
+
+Serrilhamento corrigido conforme retorno da usuária. Adiar normalização do tamanho visual dos ícones de fontes diferentes de 512x512 para o frontend. Extração do processamento de frames, textura, escala e proporção para game_video.c/h; manter SDL_Renderer e comportamento atual. Compilação e testes manuais pendentes.

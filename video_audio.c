@@ -3,7 +3,6 @@
 
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
-SDL_Texture *textura_jogo = NULL;
 SDL_AudioDeviceID dispositivo_audio;
 static SDL_AudioDeviceID dispositivo_ui = 0;
 static Uint8 *sons_ui[2] = {NULL,NULL};
@@ -82,9 +81,7 @@ void ui_som_tocar(UiSom som) {
 }
 
 
-int formato_de_cor = SDL_PIXELFORMAT_RGB555;
-float proporcao_video = 0.0f;
-int video_escala = 0, video_filtro = 0, video_proporcao = 0;
+
 
 static int modo_menu_ativo = 0;
 
@@ -157,48 +154,15 @@ void fechar_video_audio(void) {
         SDL_CloseAudioDevice(dispositivo_audio);
         dispositivo_audio=0;
     }
-    if (textura_jogo) {
-        SDL_DestroyTexture(textura_jogo);
-    }
+    descartar_textura_jogo();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     IMG_Quit();
     SDL_Quit();
 }
 
-void descartar_textura_jogo(void) {
-    if (textura_jogo) {
-        SDL_DestroyTexture(textura_jogo);
-        textura_jogo = NULL;
-    }
-}
-
 void limpar_audio(void) {
     if (dispositivo_audio) SDL_ClearQueuedAudio(dispositivo_audio);
-}
-
-void retro_video_refresh_cb(const void *data, unsigned width, unsigned height, size_t pitch) {
-    if (data) {
-        int textura_w = 0, textura_h = 0;
-        if (textura_jogo)
-            SDL_QueryTexture(textura_jogo, NULL, NULL, &textura_w, &textura_h);
-
-        /* Alguns nucleos podem alterar a resolucao durante a execucao. */
-        if (!textura_jogo || textura_w != (int)width || textura_h != (int)height) {
-            descartar_textura_jogo();
-            textura_jogo = SDL_CreateTexture(renderer, formato_de_cor,
-                                             SDL_TEXTUREACCESS_STREAMING,
-                                             (int)width, (int)height);
-            if (!textura_jogo) return;
-            /* Game textures use nearest-neighbor scaling independently of the
-               linear filtering used by PNGs and other interface assets. */
-#if SDL_VERSION_ATLEAST(2, 0, 12)
-            if (SDL_SetTextureScaleMode(textura_jogo, video_filtro ? SDL_ScaleModeLinear : SDL_ScaleModeNearest) != 0)
-                SDL_Log("Nao foi possivel ativar escala nearest: %s", SDL_GetError());
-#endif
-        }
-        SDL_UpdateTexture(textura_jogo, NULL, data, (int)pitch);
-    }
 }
 
 void retro_audio_sample_cb(int16_t left, int16_t right) {
