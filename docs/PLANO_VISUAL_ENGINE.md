@@ -77,7 +77,7 @@ Referências visuais fornecidas: fotos e capturas de LCD DMG com grade perceptí
 | NES, SNES, Mega Drive, Master System e sistemas de TV equivalentes | **CRT Clássico** | Shader CRT a avaliar e validar | Scanlines e máscara/subpixels equilibradas, com **curvatura suave nos cantos opcional**; evitar deformação excessiva |
 | Sistemas sem perfil validado | **Desligado / imagem nítida** | Renderização base | Não aplicar efeito inadequado por suposição |
 
-A indicação automática depende do console efetivamente identificado. A preferência manual do usuário prevalece. Não pressupor CRT para consoles portáteis ou DMG para todos os LCDs.
+A indicação automática depende do console efetivamente identificado. A preferência manual do usuário prevalece. Não pressupor CRT para consoles portáteis ou DMG para todos os LCDs no modo automático. A família do console é apenas recomendação: permitir seleção manual de qualquer preset em qualquer console/jogo, desde que tecnicamente compatível.
 
 ### Paleta DMG de referência
 
@@ -85,6 +85,15 @@ A indicação automática depende do console efetivamente identificado. A prefer
 - Extrair uma primeira paleta aproximada das referências fornecidas apenas para prototipagem; a captura/fotografia pode ter iluminação e correção de cor, portanto não tratá-la como medição de hardware.
 - Usar o sistema de correção/paleta do shader DMG onde possível; evitar duas colorizações conflitantes (core + shader). Comparar em jogos claros, escuros e com movimentação.
 - Manter grade e ghosting moderados para preservar legibilidade; intensidade fina somente se testes mostrarem necessidade.
+
+### Três paletas DMG selecionáveis
+
+Propostas iniciais, sujeitas a validação visual, com quatro tonalidades cada:
+- DMG Original: #D5CD49, #A2AB38, #586B25, #263C16.
+- Verde clássico: #C4E58B, #8CB85D, #487844, #183C25.
+- Pocket: #E0E4D6, #A5AE9D, #626C60, #252D27.
+
+Permitir paleta DMG em outros consoles por escolha explícita, com conversão de luminância quando necessária. Não limitar efeitos por ID de console. Manter recomendação automática e escolha manual independente; oferecer paleta original/sem conversão quando aplicável.
 
 ### CRT com vidro curvado
 
@@ -97,16 +106,16 @@ A indicação automática depende do console efetivamente identificado. A prefer
 
 Manter em **Configurações > Vídeo do jogo** (não em Customização do dashboard):
 
-- **Visual:** Automático por console / Desligado / Personalizado (quando houver suporte real).
+- **Visual:** Automático por console / Desligado / DMG Clássico / GBC Pixel Transparency / LCD Limpo / CRT Clássico (expor apenas presets implementados e validados, independentemente do console).
 - A escolha automática oferece DMG Clássico para GB, Pixel Transparency para GBC, LCD Limpo para GBA e CRT Clássico para consoles de TV **apenas depois de cada preset ser validado**; enquanto isso, fallback sem shader.
 - **Tela curva:** opção contextual dentro do CRT, desligada inicialmente.
 - Conservar somente as duas proporções já aprovadas: Original do console e Pixels quadrados. Não multiplicar filtros, paletas e efeitos independentes no menu principal.
-- Persistir preferência global e, quando necessário, exceção por console; preservar preferência manual, restaurar padrões e impedir aplicação de efeitos não suportados.
+- Persistir preferência global e, quando necessário, exceção por console; preservar preferência manual, restaurar padrões e impedir apenas efeitos tecnicamente incompatíveis, nunca restringir por família de console.
 
 ### Dependências, licença e limites
 
 - Os dois projetos de referência fornecem shaders para RetroArch; **não são plugins instaláveis diretamente no SDL_Renderer atual**. Avaliar suporte a presets Slang multipass (librashader ou integração gráfica equivalente), texturas auxiliares, histórico de frames, framebuffer float, desempenho e restauração de contexto.
-- O repositório brickboy-dmg-shader declara licença **Apache-2.0**; registrar atribuição e avisos obrigatórios ao reutilizar código.
+- O repositório brickboy-dmg-shader declara licença **Apache-2.0**; permite uso, modificação e redistribuição inclusive comercial; incluir licença, preservar avisos aplicáveis, indicar arquivos modificados e reproduzir avisos NOTICE quando existentes. Não exige relicenciar todo o Fofita.
 - O repositório Pixel_Transparency declara autoria/copyright e publica versões Slang e GLSL. **Não foi identificada uma licença de redistribuição explícita na consulta**: confirmar autorização/licença antes de copiar, modificar ou embutir arquivos no Fofita. Até lá, manter apenas link/referência e protótipo próprio ou integração autorizada.
 - A versão 3.0 de Pixel Transparency integra a grade LCD em seu próprio pipeline; a implementação GLSL antiga não acompanha integralmente a versão 3.0. Movimentação por giroscópio é opcional e não presumida em Windows/Switch.
 - Testar no Windows primeiro, sem prometer compatibilidade no Switch antes de medições e validação em hardware.
@@ -115,7 +124,7 @@ Manter em **Configurações > Vídeo do jogo** (não em Customização do dashbo
 ### Critérios de aceite
 
 1. GB mostra cores DMG quentes/oliva e grade legível sem borrar os sprites; comparação lado a lado com imagem sem filtro.
-2. GBC exibe efeito distinto e não recebe paleta DMG; nenhum shader LCD duplicado.
+2. GBC exibe efeito distinto no modo automático e não recebe paleta DMG salvo escolha manual; nenhum shader LCD duplicado. Testar seleção cruzada de presets entre consoles.
 3. CRT oferece tela normal ou curva sem recortar elementos da interface do jogo.
 4. O mesmo jogo funciona com filtros desligados; troca de console/restauração de configuração não deixa efeitos residuais.
 5. Desempenho, shaders quebrados, falta de GPU compatível e falha de carregamento resultam em fallback seguro.
