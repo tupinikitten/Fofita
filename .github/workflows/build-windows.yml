@@ -271,6 +271,22 @@ jobs:
           echo "Pacote final preparado:"
           find dist/Fofita -maxdepth 1 -type f -printf '%f\n' | sort
 
+      # PATH sem MSYS2: uma DLL esquecida no pacote impede o app de abrir.
+      # Roda numa copia, para nada ser gravado em dist/.
+      - name: Teste de abertura do Fofita.exe do pacote
+        timeout-minutes: 3
+        env:
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set -euo pipefail
+          rm -rf build/abrir && mkdir -p build/abrir
+          cp -a dist/Fofita/. build/abrir/
+          cd build/abrir
+          codigo=0
+          PATH=/c/Windows/System32:/c/Windows /usr/bin/timeout 8 ./Fofita.exe || codigo=$?
+          [ "$codigo" = 124 ] || { echo "::error::Fofita.exe encerrou sozinho (codigo $codigo)"; exit 1; }
+          echo "Fofita.exe do pacote permaneceu aberto por 8 s"
+
       # Instalado somente depois do pacote pronto, para nunca entrar nele.
       - name: Instalar OpenGL por software (somente testes)
         run: pacman -S --noconfirm --needed mingw-w64-x86_64-mesa
@@ -335,6 +351,13 @@ jobs:
             ./test_core.exe "${par%:*}" "cores/${par#*:}_libretro.dll" tmp || { cat fofita_shader.log || true; exit 1; }
             echo "::endgroup::"
           done
+          # Pasta com espacos e acentos (comum em perfis do Windows em pt-BR),
+          # usando os caminhos padrao do app para a biblioteca e o preset.
+          acentos="../Área de teste ção"
+          rm -rf "$acentos" && cp -a . "$acentos"
+          echo "::group::test_core (nes, pasta com acentos)"
+          (cd "$acentos" && ./test_core.exe nes cores/fceumm_libretro.dll tmp) || exit 1
+          echo "::endgroup::"
           echo "::group::test_menu"
           ./test_menu.exe
           echo "::endgroup::"
