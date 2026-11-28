@@ -222,3 +222,51 @@ Diretriz aprovada: automatizar regressões progressivamente no GitHub Actions. P
 ### V2.2c.2a — loader opcional
 
 Nome do menu reconfirmado. Loader SDL verifica DLL ao lado do executável, ABI 2/API 5 conforme header oficial v0.12.0. Release x64 disponível em https://github.com/SnowflakePowered/librashader/releases/tag/librashader-v0.12.0 ; SHA256 521fe0f364bfa705883f9e99fb1733a3a24f0f403bcc5591b6b78f6cff289183. Empacotamento adiado até verificar licenças MPL/GPL e componentes do binário. Sem execução Slang ainda. Ausência da DLL mantém passthrough.
+
+## V2.2c.2 e V2.2c.3 — execução Slang pelo librashader (28/11/2026)
+
+**Estado: implementado e validado por testes automatizados no CI. Pendente: validação manual em GPU real.**
+
+### Implementado
+
+- `slang_backend.c/h`: API C do librashader 0.12.0 (ABI 2, API 5), carregada em tempo de execução pela pasta do executável. ABI/API são conferidas antes de resolver o restante.
+- `shader_manager.c/h`: contexto OpenGL 3.3 core em janela oculta, separado do SDL_Renderer; o contexto anterior é restaurado. O preset é renderizado na resolução do retângulo do jogo na tela e volta por `glReadPixels` (síncrono) para uma textura SDL. Não se aplica à interface.
+- `game_video.c`: guarda uma cópia do último frame; refaz a saída em frame novo ou mudança de tamanho; reutiliza em frames repetidos. A imagem sem efeito permanece atualizada como fallback.
+- Preset próprio de duas passagens em `shaders/fofita_teste/` (tom quente + grade por pixel), sem código de terceiros. É um preset de **teste**, não um dos visuais do roadmap.
+- Menu: **Configurações > Configurações de vídeo > Shader**: Nenhum / Passthrough (teste) / Slang (teste), persistido em `video_shader`; mostra "falhou" e um aviso ao voltar ao menu. Diagnóstico em `fofita_shader.log`.
+- `video_math.c` e `video_config.c`: proporção, conversão de pixels e configuração isoladas para testes.
+- Correção: o botão fechar da janela principal encerra o app mesmo com a janela oculta do shader (no SDL2 clássico, `SDL_QUIT` só é enviado quando a última janela fecha; o sdl2-compat atual não conta janelas ocultas).
+
+### Dependência e licença
+
+- O binário oficial 0.12.0 para Windows x64 (zip SHA-256 `521fe0f364bfa705883f9e99fb1733a3a24f0f403bcc5591b6b78f6cff289183`) **não é usado**: importa `D3DX9_43.dll`, `MSVCP140.dll` e `VCRUNTIME140*.dll` e não carregou no runner Windows.
+- O CI compila a biblioteca do commit `87e8a97b50516d997defeaa168173dcd185d4022`, com `Cargo.lock` travado, Rust 1.93.0, somente runtime OpenGL e CRT estático (`tools/compilar_librashader.sh`). A integridade é garantida pelo commit e pelo lockfile; a DLL compilada não tem hash fixado. A DLL resultante importa apenas bibliotecas do Windows.
+- Redistribuição sob MPL-2.0; header sob MIT (idêntico ao da tag). O pacote leva `licenses/librashader/` (licença, origem do código e avisos de terceiros gerados do `Cargo.lock`: 132 pacotes; a geração falha se algum só permitir GPL/LGPL/AGPL pela expressão declarada ou não declarar licença). Isso é uma verificação automatizada de metadados, não uma revisão jurídica.
+
+### Resultados automatizados (run 46146800926, commit 6a241a9)
+
+| Teste | Ambiente | Resultado |
+| --- | --- | --- |
+| `test_unit`: proporção, configuração, conversão de pixels, falhas do carregador (ausente, corrompida, ABI errada, símbolo ausente) | Linux (ASan/UBSan) e Windows | 56/56 em cada |
+| `test_gpu`: Slang pixel a pixel, formatos RGB555/RGB565/XRGB8888, redimensionamento, mudança de resolução, preset ausente/inválido/com erro de compilação, recuperação, passthrough | Windows; SDL_Renderer software, OpenGL, Direct3D 11 e Direct3D 9 | 85/85 em cada |
+| `test_core`: núcleo real, sem shader, Slang em duas sessões e passthrough | NES (fceumm do repositório), GB e GBC (gambatte `b14881d`, compilado só para teste) | 17/17 em cada |
+| `test_core` NES com o app em pasta com espaços e acentos | Windows | 17/17 |
+| `test_menu`: navegação por teclado até o Shader, persistência, reabertura e restaurar padrões | Windows | 32/32 |
+| Abertura do `Fofita.exe` do pacote com PATH sem MSYS2 | Windows | permaneceu aberto 8 s |
+
+### Limites desta validação
+
+- O OpenGL do CI é o Mesa llvmpipe (CPU). Não houve teste em GPU física nem medida de desempenho representativa; os tempos do log do CI não servem como referência.
+- Não automatizados: mouse e controle no menu, áudio, entrada durante o jogo, SRAM/savestates, jogos comerciais, estética e 720p/1080p em monitor real. O teste de abertura não navega pelo app.
+- O readback síncrono na resolução de saída pode custar desempenho, sobretudo em telas grandes. Após 600 quadros o `fofita_shader.log` registra a média por quadro; medir em hardware real antes de adicionar efeitos mais pesados.
+- Falha de carregamento tem fallback testado. Travamento ou perda de contexto do driver durante o jogo não foi testado.
+- Apenas Windows x64. **Switch não validado**: a abordagem (DLL Rust, OpenGL de desktop 3.3, janela oculta e readback) precisa ser reavaliada antes de qualquer promessa.
+- O pacote não distribui o núcleo de GB/GBC; é preciso `cores/gambatte_libretro.dll` local.
+
+### Pendências fora do escopo desta etapa
+
+- O pacote já distribuía `cores/fceumm_libretro.dll` e DLLs do MSYS2 sem avisos de licença correspondentes; há também DLLs versionadas na raiz do repositório. Revisar antes de qualquer distribuição pública.
+
+### Próximo passo
+
+Após o checklist manual em GPU real (incluindo a média por quadro do log): V2.3, Sharp Bilinear e widescreen adaptativo. Sharp Bilinear pode ser um preset próprio no pipeline já validado, com alternativa sem GPU a avaliar.
