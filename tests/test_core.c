@@ -107,7 +107,12 @@ static unsigned char *capturar(const char *nucleo, const char *console,
     *w = jw * 3; *h = jh * 3;
     SDL_SetWindowSize(window, *w, *h);
     SDL_Event evento;
-    for (int i = 0; i < 20; ++i) { while (SDL_PollEvent(&evento)) {} SDL_Delay(10); }
+    for (int i = 0; i < 20; ++i) {
+        while (SDL_PollEvent(&evento)) {}
+        SDL_RenderClear(renderer);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(10);
+    }
     unsigned char *px = malloc((size_t)*w * *h * 4);
     for (int i = 0; i < 60; ++i) {
         SDL_PumpEvents();

@@ -180,14 +180,16 @@ static void testar_passthrough(void) {
     shader_fechar();
 }
 
-static int nao_verificados;
-
-/* Processa eventos como o loop principal ate o renderer ver o novo tamanho. */
+/* Processa eventos e apresenta quadros, como o loop principal, ate o renderer
+   ver o novo tamanho. O renderer "software" do sdl2-compat so atualiza o
+   tamanho de saida depois de um SDL_RenderPresent. */
 static void esperar_janela(int w, int h) {
     SDL_Event e;
     int ow = 0, oh = 0;
     for (int i = 0; i < 100; ++i) {
         while (SDL_PollEvent(&e)) {}
+        SDL_RenderClear(renderer);
+        SDL_RenderPresent(renderer);
         SDL_GetRendererOutputSize(renderer, &ow, &oh);
         if (i >= 3 && ow == w && oh == h) return;
         SDL_Delay(10);
@@ -200,35 +202,12 @@ static void esperar_janela(int w, int h) {
             v.major, v.minor, v.patch, jw, jh, ow, oh);
 }
 
-/* Limitacao observada no CI com sdl2-compat (SDL3): no renderer "software" a
-   janela encolhe, mas o tamanho de saida do renderer continua o anterior. No
-   SDL2 classico isso nao ocorre, e nos renderers de GPU tudo e verificado. */
-static int limitacao_redimensionar(int w, int h, int ow, int oh) {
-    SDL_RendererInfo info;
-    SDL_version v;
-    int jw = 0, jh = 0;
-    SDL_GetVersion(&v);
-    SDL_GetWindowSize(janela, &jw, &jh);
-    return !SDL_GetRendererInfo(renderer, &info) && !strcmp(info.name, "software") &&
-           v.minor == 32 && v.patch >= 50 && /* numeracao do sdl2-compat */
-           jw == w && jh == h && ow >= w && oh >= h;
-}
-
 /* Desenha como o loop principal e confere o que chegou ao SDL_Renderer. */
 static void conferir_tela(int fw, int fh, int escala, int modo, const char *rotulo) {
     int w = fw * escala, h = fh * escala, ow = 0, oh = 0;
     SDL_SetWindowSize(janela, w, h);
     esperar_janela(w, h);
     SDL_GetRendererOutputSize(renderer, &ow, &oh);
-    if ((ow != w || oh != h) && limitacao_redimensionar(w, h, ow, oh)) {
-        /* Desenhar mesmo assim, para o motor visual avancar de estado. */
-        game_video_desenhar("gb");
-        SDL_RenderPresent(renderer);
-        ++nao_verificados;
-        printf("  NAO VERIFICADO na tela: %s (renderer software do sdl2-compat nao reduz a saida)\n",
-               rotulo);
-        return;
-    }
     VERIFICAR(ow == w && oh == h, "%s: janela %dx%d (esperado %dx%d)", rotulo, ow, oh, w, h);
     if (ow != w || oh != h) return;
     int falhas_antes = testes_falhos;
@@ -324,7 +303,5 @@ int main(int argc, char **argv) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(janela);
     SDL_Quit();
-    if (nao_verificados)
-        printf("test_gpu: %d verificacoes de tela NAO executadas\n", nao_verificados);
     return testes_resumo("test_gpu");
 }
