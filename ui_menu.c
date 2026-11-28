@@ -6,6 +6,7 @@
 #include "ui_cards.h"
 #include "video_audio.h"
 #include "shader_manager.h"
+#include "video_config.h"
 #include "ui_wallpaper.h"
 #include <SDL2/SDL_image.h>
 #include <stdio.h>
@@ -280,14 +281,12 @@ static void carregar_config(void) {
             if(!strcmp(valor,"five")) ui_card_layout_set(CARD_LAYOUT_5);
             else if(!strcmp(valor,"grid")) ui_card_layout_set(CARD_LAYOUT_GRID);
             else ui_card_layout_set(CARD_LAYOUT_3);
-        } else if (strncmp(linha,"video_escala=",13)==0) {
-            int v=atoi(linha+13); if(v>=0 && v<=2) video_escala=v;
-        } else if (strncmp(linha,"video_filtro=",13)==0) {
-            int v=atoi(linha+13); if(v>=0 && v<=1) video_filtro=v;
-        } else if (strncmp(linha,"video_proporcao=",16)==0) {
-            int v=atoi(linha+16); video_proporcao=(v==1);
-        } else if (strncmp(linha,"video_shader=",13)==0) {
-            video_shader=(atoi(linha+13)==1);
+        } else if (strncmp(linha,"video_",6)==0) {
+            VideoPrefs v={video_escala,video_filtro,video_proporcao,video_shader};
+            if (video_config_ler_linha(&v,linha)) {
+                video_escala=v.escala; video_filtro=v.filtro;
+                video_proporcao=v.proporcao; video_shader=v.shader;
+            }
         } else if (strncmp(linha,"game_view=",10)==0) {
             ui_game_view_set(strcmp(linha+10,"card")==0
                              ? GAME_VIEW_CARD : GAME_VIEW_CARTRIDGE);
@@ -311,8 +310,8 @@ static void salvar_config(void) {
         fprintf(f,"wallpaper_console=%s|%s\n",
                 wallpapers_console[i].console,
                 wallpapers_console[i].caminho);
-    fprintf(f,"video_escala=%d\nvideo_filtro=%d\nvideo_proporcao=%d\n",video_escala,video_filtro,video_proporcao);
-    fprintf(f,"video_shader=%d\n",video_shader);
+    VideoPrefs video={video_escala,video_filtro,video_proporcao,video_shader};
+    video_config_gravar(f,&video);
     fprintf(f,"game_view=%s\n",ui_game_view_get()==GAME_VIEW_CARD?"card":"cartridge");
     fprintf(f,"card_layout=%s\n",
             ui_card_layout_get()==CARD_LAYOUT_GRID?"grid":
@@ -1251,8 +1250,8 @@ MenuAcao ui_menu_tecla(SDL_Keycode tecla, Uint16 modificadores) {
                 case 0: video_proporcao=(video_proporcao+1)%2; break;
                 case 1: video_escala=(video_escala+1)%3; break;
                 case 2: video_filtro=!video_filtro; break;
-                case 3: video_shader=!video_shader; break;
-                case 4: video_proporcao=video_escala=video_filtro=video_shader=0; break;
+                case 3: video_shader=(video_shader+1)%SHADER_TOTAL; shader_limpar_falha(); break;
+                case 4: video_proporcao=video_escala=video_filtro=video_shader=0; shader_limpar_falha(); break;
                 case 5: tela_configuracoes=1; opcao_configuracoes=1; total_opcoes_config=3; break;
                 }
                 salvar_config();
@@ -2225,7 +2224,12 @@ void ui_menu_desenhar(void) {
                     case 0: snprintf(nome,sizeof(nome),"Proporcao: %s",ratios[video_proporcao]); break;
                     case 1: snprintf(nome,sizeof(nome),"Balanceamento: %s",escalas[video_escala]); break;
                     case 2: snprintf(nome,sizeof(nome),"Filtragem: %s",video_filtro?"Suave":"Nitida"); break;
-                    case 3: snprintf(nome,sizeof(nome),"Shader: %s",video_shader?"Passthrough (teste)":"Nenhum"); break;
+                    case 3: {
+                        const char *shaders[SHADER_TOTAL]={"Nenhum","Passthrough (teste)","Slang (teste)"};
+                        snprintf(nome,sizeof(nome),"Shader: %s%s",shaders[video_shader],
+                                 shader_falhou()?" - falhou":"");
+                        break;
+                    }
                     case 4: snprintf(nome,sizeof(nome),"Restaurar padroes"); break;
                     default: snprintf(nome,sizeof(nome),"Voltar"); break;
                     }

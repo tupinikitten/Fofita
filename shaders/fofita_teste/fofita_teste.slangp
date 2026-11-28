@@ -1,0 +1,14 @@
+# Preset de teste do Fofita (shader proprio do projeto, sem codigo de terceiros).
+# Passada 0: tom quente na resolucao do jogo.
+# Passada 1: grade por pixel do jogo na resolucao final da tela.
+shaders = 2
+
+shader0 = tom_quente.slang
+filter_linear0 = false
+scale_type0 = source
+scale0 = 1.0
+
+shader1 = grade.slang
+filter_linear1 = false
+scale_type1 = viewport
+scale1 = 1.0

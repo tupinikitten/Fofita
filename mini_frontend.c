@@ -6,6 +6,7 @@
 #include <SDL2/SDL.h>
 #include "video_audio.h"
 #include "game_video.h"
+#include "shader_manager.h"
 #include "libretro_core.h"
 #include "input.h"
 #include "console_registry.h"
@@ -39,6 +40,7 @@ static bool iniciar_jogo_atual(void) {
     }
 
     descartar_textura_jogo();
+    shader_limpar_falha(); /* cada jogo tenta o shader escolhido novamente */
     limpar_audio();
     configurar_video_jogo();
     em_menu = false;
@@ -53,6 +55,8 @@ static void voltar_ao_menu(void) {
     limpar_audio();
     configurar_video_menu();
     em_menu = true;
+    if (shader_falhou())
+        ui_menu_aviso("Shader indisponivel: imagem normal (ver fofita_shader.log)");
     ui_menu_focar_carrossel();  /* o cartucho do jogo que acabou de rodar continua em foco */
 }
 
