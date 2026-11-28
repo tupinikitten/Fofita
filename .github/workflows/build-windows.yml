@@ -10,7 +10,40 @@ permissions:
   contents: read
 
 jobs:
+  testes-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Instalar SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libgl-dev
+      - name: Testes sem GPU com AddressSanitizer e UBSan
+        env:
+          EXTRA_CFLAGS: -fsanitize=address,undefined -fno-sanitize-recover=all
+          ASAN_OPTIONS: detect_leaks=0
+        run: bash tests/run_unit.sh
+
+  avisos-licenca:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Obter fonte fixada do librashader
+        run: |
+          git clone --depth 1 --branch librashader-v0.12.0 \
+            https://github.com/SnowflakePowered/librashader "$RUNNER_TEMP/librashader"
+      - name: Gerar avisos de licenca
+        run: |
+          python3 tools/gerar_avisos_librashader.py "$RUNNER_TEMP/librashader" avisos
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avisos-librashader
+          path: avisos/
+          if-no-files-found: error
+          retention-days: 14
+
   windows:
+    needs: [testes-linux, avisos-licenca]
     runs-on: windows-latest
     defaults:
       run:
@@ -30,7 +63,18 @@ jobs:
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-SDL2_image
             mingw-w64-x86_64-sdl3
+            curl
+            unzip
             zip
+
+      - name: Obter avisos de licenca
+        uses: actions/download-artifact@v4
+        with:
+          name: avisos-librashader
+          path: avisos
+
+      - name: Testes sem GPU (Windows)
+        run: bash tests/run_unit.sh
 
       - name: Compilar Fofita
         run: |
@@ -44,6 +88,18 @@ jobs:
           set -euo pipefail
           mkdir -p dist/Fofita
           cp Fofita.exe dist/Fofita/
+
+          # librashader: versao fixa, SHA-256 conferido, com avisos de licenca.
+          bash tools/obter_librashader.sh dist/Fofita
+          mkdir -p dist/Fofita/licenses/librashader
+          cp avisos/* dist/Fofita/licenses/librashader/
+          cp -a shaders dist/Fofita/
+          for file in shaders/fofita_teste/fofita_teste.slangp \
+                      licenses/librashader/librashader-MPL-2.0.md \
+                      licenses/librashader/THIRD_PARTY_NOTICES.txt \
+                      licenses/librashader/LEIA-ME-librashader.txt; do
+            test -s "dist/Fofita/$file" || { echo "::error::Ausente no pacote: $file"; exit 1; }
+          done
 
           for folder in ui assets labels templates cores; do
             if [ -d "$folder" ]; then cp -a "$folder" dist/Fofita/; fi
@@ -75,7 +131,7 @@ jobs:
           # Dependencias PE/Windows (nao usar ldd: ele pode nao encontrar
           # DLLs quando o EXE e analisado no ambiente MSYS2).
           # Percorre tambem as dependencias das DLLs copiadas e dos cores.
-          queue=(Fofita.exe)
+          queue=(Fofita.exe dist/Fofita/librashader.dll)
           while IFS= read -r -d '' core; do
             queue+=("$core")
           done < <(find dist/Fofita/cores -type f -iname '*.dll' -print0 2>/dev/null || true)
@@ -129,8 +185,67 @@ jobs:
               exit 1
             }
           fi
+          echo "Imports de librashader.dll:"
+          objdump -p dist/Fofita/librashader.dll | sed -n 's/^[[:space:]]*DLL Name: /  /p'
+          # O OpenGL deve ser o do driver do usuario, nunca um renderizador por software.
+          test ! -e dist/Fofita/opengl32.dll || { echo "::error::opengl32.dll nao pode ser distribuida"; exit 1; }
           echo "Pacote final preparado:"
           find dist/Fofita -maxdepth 1 -type f -printf '%f\n' | sort
+
+      # Instalado somente depois do pacote pronto, para nunca entrar nele.
+      - name: Instalar OpenGL por software (somente testes)
+        run: pacman -S --noconfirm --needed mingw-w64-x86_64-mesa
+
+      - name: Testes de GPU com a librashader.dll do pacote (Mesa llvmpipe)
+        timeout-minutes: 10
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set -euo pipefail
+          # Copia do pacote final + executaveis de teste + Mesa.
+          rm -rf build/gpu && mkdir -p build/gpu/tmp
+          cp -a dist/Fofita/. build/gpu/
+          FLAGS="-std=gnu11 -O1 -g -Wall -Wextra -Werror"
+          SDL="$(pkg-config --cflags sdl2 SDL2_image) $(pkg-config --libs sdl2 SDL2_image | sed 's/-mwindows//; s/-lSDL2main//; s/-Dmain=SDL_main//')"
+          gcc $FLAGS tests/test_gpu.c game_video.c video_math.c shader_manager.c slang_backend.c \
+            -o build/gpu/test_gpu.exe $SDL -lopengl32 -lm
+          gcc -std=gnu11 -O1 -g -Wall tests/test_core_nes.c game_video.c video_math.c shader_manager.c \
+            slang_backend.c video_audio.c libretro_core.c input.c \
+            -o build/gpu/test_core_nes.exe $SDL -lopengl32 -lm
+          queue=(/mingw64/bin/opengl32.dll)
+          cp /mingw64/bin/opengl32.dll build/gpu/
+          index=0
+          while (( index < ${#queue[@]} )); do
+            current="${queue[$index]}"; index=$((index+1))
+            while IFS= read -r dll; do
+              source=$(find /mingw64/bin -maxdepth 1 -type f -iname "$dll" -print -quit)
+              if [ -n "$source" ] && [ ! -f "build/gpu/${source##*/}" ]; then
+                cp "$source" build/gpu/; queue+=("$source")
+              fi
+            done < <(objdump -p "$current" | sed -n 's/^[[:space:]]*DLL Name: //p')
+          done
+
+          cd build/gpu
+          executados=0
+          for driver in software opengl direct3d11 direct3d; do
+            echo "::group::test_gpu ($driver)"
+            codigo=0
+            ./test_gpu.exe "$driver" "$(cygpath -m "$PWD/librashader.dll")" \
+              "$(cygpath -m "$PWD/shaders/fofita_teste/fofita_teste.slangp")" tmp || codigo=$?
+            echo "::endgroup::"
+            if [ "$codigo" = 0 ]; then
+              executados=$((executados+1))
+            elif [ "$codigo" = 77 ] && [ "$driver" != software ] && [ "$driver" != opengl ]; then
+              echo "::warning::Renderer $driver indisponivel no runner; nao testado"
+            else
+              echo "::error::test_gpu falhou com $driver (codigo $codigo)"; cat fofita_shader.log || true; exit 1
+            fi
+          done
+          echo "Renderers testados: $executados"
+          echo "::group::test_core_nes"
+          ./test_core_nes.exe tmp || { cat fofita_shader.log || true; exit 1; }
+          echo "::endgroup::"
 
       - name: Publicar pacote para download (ZIP unico)
         uses: actions/upload-artifact@v4
