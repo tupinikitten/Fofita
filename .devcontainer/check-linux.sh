@@ -9,7 +9,8 @@ mapfile -t FLAGS < <(pkg-config --cflags sdl2 SDL2_image | tr ' ' '\n' | grep -v
 files=(
   cartridge_style.c console_registry.c image_processor.c input.c
   mini_frontend.c ui_carousel.c ui_cards.c ui_game_view.c ui_menu.c
-  ui_text.c ui_theme.c video_audio.c
+  ui_text.c ui_theme.c video_audio.c game_video.c shader_manager.c
+  slang_backend.c video_math.c video_config.c ui_wallpaper.c
 )
 for file in "${files[@]}"; do
   echo "Checando $file"
