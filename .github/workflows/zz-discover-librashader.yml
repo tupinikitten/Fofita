@@ -1,0 +1,21 @@
+name: Temp - inspecionar release librashader
+on:
+  push:
+    branches: ["feature/visual-engine"]
+    paths: [".github/workflows/zz-discover-librashader.yml"]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Listar e inspecionar assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          R=SnowflakePowered/librashader; T=librashader-v0.12.0
+          gh api repos/$R/releases/tags/$T --jq '.published_at, (.assets[] | "\(.name) \(.size) \(.digest) \(.browser_download_url)"), .body'
+          mkdir dl; gh release download $T -R $R -D dl
+          sha256sum dl/*
+          for z in dl/*; do echo "== $z"; case "$z" in *x86_64-windows*.zip|*x86_64*win*.zip) unzip -l "$z";; *.zip) unzip -l "$z" | head -20;; esac; done
