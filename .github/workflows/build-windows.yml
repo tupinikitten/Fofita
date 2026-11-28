@@ -42,8 +42,32 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  librashader:
+    runs-on: windows-2025
+    env:
+      LIBRASHADER_RUST: 1.93.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache da DLL compilada
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: lr-dist
+          key: librashader-gl-87e8a97-rust1.93.0-${{ hashFiles('tools/compilar_librashader.sh') }}
+      - name: Compilar librashader (somente OpenGL)
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash tools/compilar_librashader.sh "$RUNNER_TEMP/librashader" lr-dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: librashader-dll
+          path: lr-dist/librashader.dll
+          if-no-files-found: error
+          retention-days: 14
+
   windows:
-    needs: [testes-linux, avisos-licenca]
+    needs: [testes-linux, avisos-licenca, librashader]
     runs-on: windows-latest
     defaults:
       run:
@@ -63,8 +87,6 @@ jobs:
             mingw-w64-x86_64-SDL2
             mingw-w64-x86_64-SDL2_image
             mingw-w64-x86_64-sdl3
-            curl
-            unzip
             zip
 
       - name: Obter avisos de licenca
@@ -72,6 +94,12 @@ jobs:
         with:
           name: avisos-librashader
           path: avisos
+
+      - name: Obter librashader compilada
+        uses: actions/download-artifact@v4
+        with:
+          name: librashader-dll
+          path: lr-dist
 
       - name: Testes sem GPU (Windows)
         run: bash tests/run_unit.sh
@@ -89,8 +117,8 @@ jobs:
           mkdir -p dist/Fofita
           cp Fofita.exe dist/Fofita/
 
-          # librashader: versao fixa, SHA-256 conferido, com avisos de licenca.
-          bash tools/obter_librashader.sh dist/Fofita
+          # librashader: commit fixado, compilada neste workflow, com avisos.
+          cp lr-dist/librashader.dll dist/Fofita/
           mkdir -p dist/Fofita/licenses/librashader
           cp avisos/* dist/Fofita/licenses/librashader/
           cp -a shaders dist/Fofita/
@@ -187,6 +215,10 @@ jobs:
           fi
           echo "Imports de librashader.dll:"
           objdump -p dist/Fofita/librashader.dll | sed -n 's/^[[:space:]]*DLL Name: /  /p'
+          # A DLL deve depender apenas do Windows: nada de redistribuiveis extras.
+          if objdump -p dist/Fofita/librashader.dll | grep -Eiq 'DLL Name: (d3dx9|msvcp|vcruntime)'; then
+            echo "::error::librashader.dll exige redistribuivel ausente do Windows padrao"; exit 1
+          fi
           # O OpenGL deve ser o do driver do usuario, nunca um renderizador por software.
           test ! -e dist/Fofita/opengl32.dll || { echo "::error::opengl32.dll nao pode ser distribuida"; exit 1; }
           echo "Pacote final preparado:"

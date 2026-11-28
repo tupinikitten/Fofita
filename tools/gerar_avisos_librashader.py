@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Gera os avisos de licenca do binario librashader distribuido pelo Fofita.
 
-Percorre, com `cargo metadata --locked`, as dependencias de execucao do
-librashader-capi para Windows x64 (a partir do Cargo.lock da tag fixada) e
-copia os textos de licenca presentes em cada pacote, incluindo codigo C/C++
+Lista, com `cargo tree --locked`, as dependencias de execucao do
+librashader-capi (somente runtime OpenGL, Windows x64, mesmas opcoes da
+compilacao) a partir do Cargo.lock da tag fixada e copia os textos de licenca presentes em cada pacote, incluindo codigo C/C++
 embutido. Falha se algum componente so permitir licenca GPL/LGPL/AGPL ou nao
 declarar licenca.
 
@@ -55,19 +55,20 @@ def main():
         ["cargo", "metadata", "--locked", "--format-version", "1",
          "--filter-platform", ALVO], cwd=fonte, text=True))
     pacotes = {p["id"]: p for p in meta["packages"]}
-    nos = {n["id"]: n for n in meta["resolve"]["nodes"]}
-    raiz = next(i for i, p in pacotes.items() if p["name"] == "librashader-capi")
-
-    visitados, fila = set(), [raiz]
-    while fila:
-        atual = fila.pop()
-        if atual in visitados:
-            continue
-        visitados.add(atual)
-        for dep in nos[atual]["deps"]:
-            # kind None = dependencia normal; ignora build e dev.
-            if any(k["kind"] is None for k in dep["dep_kinds"]):
-                fila.append(dep["pkg"])
+    por_nome = {(p["name"], p["version"]): i for i, p in pacotes.items()}
+    arvore = subprocess.check_output(
+        ["cargo", "tree", "--locked", "-p", "librashader-capi",
+         "--no-default-features", "--features", "runtime-opengl",
+         "--target", ALVO, "-e", "normal", "--prefix", "none",
+         "--format", "{p}"], cwd=fonte, text=True)
+    visitados = set()
+    for linha in arvore.splitlines():
+        partes = linha.split()
+        if len(partes) >= 2:
+            visitados.add(por_nome[(partes[0], partes[1].lstrip("v"))])
+    nomes = {pacotes[i]["name"] for i in visitados}
+    if "librashader-runtime-gl" not in nomes or "librashader-runtime-d3d9" in nomes:
+        sys.exit("arvore de dependencias nao corresponde a compilacao OpenGL")
 
     saida.mkdir(parents=True, exist_ok=True)
     resumo, textos, sem_arquivo, problemas = [], {}, [], []
@@ -107,7 +108,9 @@ def main():
     with open(saida / "THIRD_PARTY_NOTICES.txt", "w", encoding="utf-8") as f:
         f.write(f"Componentes do librashader {VERSAO} (commit {COMMIT}), alvo {ALVO}.\n")
         f.write("Lista obtida do Cargo.lock oficial (dependencias normais; pode incluir\n")
-        f.write("componentes de compilacao como macros, que nao vao para o binario).\n\n")
+        f.write("componentes de compilacao como macros, que nao vao para o binario).\n")
+        f.write("O binario tambem contem a biblioteca padrao do Rust (MIT OR Apache-2.0,\n")
+        f.write("https://github.com/rust-lang/rust) e o CRT estatico da Microsoft.\n\n")
         f.write("\n".join(resumo) + "\n")
         if sem_arquivo:
             f.write("\n== Pacotes publicados sem arquivo de licenca (vale a expressao SPDX;\n")
@@ -125,11 +128,13 @@ def main():
 
     shutil.copyfile(fonte / "LICENSE.md", saida / "librashader-MPL-2.0.md")
     (saida / "LEIA-ME-librashader.txt").write_text(
-        f"""Este pacote inclui librashader.dll {VERSAO}, binario oficial sem modificacoes,
+        f"""Este pacote inclui librashader.dll {VERSAO}, compilada pelo CI do Fofita a partir
+do codigo oficial sem modificacoes (somente runtime OpenGL, CRT estatico),
 (c) autores do librashader. O projeto oferece "MPL-2.0 OR GPL-3.0-only";
 o Fofita o redistribui sob a Mozilla Public License 2.0
 (librashader-MPL-2.0.md).
 
+Receita de compilacao: tools/compilar_librashader.sh no repositorio do Fofita.
 Codigo-fonte correspondente (MPL-2.0, secao 3.2):
 https://github.com/SnowflakePowered/librashader/tree/librashader-v{VERSAO}
 commit {COMMIT}

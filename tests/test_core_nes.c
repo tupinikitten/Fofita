@@ -65,6 +65,8 @@ static unsigned char *capturar(const char *rom, int modo, int *w, int *h) {
     SDL_QueryTexture(textura_jogo, NULL, NULL, &jw, &jh);
     *w = jw * 3; *h = jh * 3;
     SDL_SetWindowSize(window, *w, *h);
+    SDL_Event evento;
+    for (int i = 0; i < 20; ++i) { while (SDL_PollEvent(&evento)) {} SDL_Delay(10); }
     unsigned char *px = malloc((size_t)*w * *h * 4);
     for (int i = 0; i < 60; ++i) {
         SDL_PumpEvents();

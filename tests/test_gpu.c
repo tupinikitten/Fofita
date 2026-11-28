@@ -180,14 +180,30 @@ static void testar_passthrough(void) {
     shader_fechar();
 }
 
+/* Processa eventos como o loop principal ate o renderer ver o novo tamanho. */
+static void esperar_janela(int w, int h) {
+    SDL_Event e;
+    int ow = 0, oh = 0;
+    for (int i = 0; i < 100; ++i) {
+        while (SDL_PollEvent(&e)) {}
+        SDL_GetRendererOutputSize(renderer, &ow, &oh);
+        if (i >= 3 && ow == w && oh == h) return;
+        SDL_Delay(10);
+    }
+    int jw = 0, jh = 0;
+    SDL_GetWindowSize(janela, &jw, &jh);
+    fprintf(stderr, "janela %dx%d, saida do renderer %dx%d\n", jw, jh, ow, oh);
+}
+
 /* Desenha como o loop principal e confere o que chegou ao SDL_Renderer. */
 static void conferir_tela(int fw, int fh, int escala, int modo, const char *rotulo) {
     int w = fw * escala, h = fh * escala, ow = 0, oh = 0;
     SDL_SetWindowSize(janela, w, h);
-    for (int i = 0; i < 10; ++i) { SDL_PumpEvents(); SDL_Delay(10); }
+    esperar_janela(w, h);
     SDL_GetRendererOutputSize(renderer, &ow, &oh);
     VERIFICAR(ow == w && oh == h, "%s: janela %dx%d (esperado %dx%d)", rotulo, ow, oh, w, h);
     if (ow != w || oh != h) return;
+    int falhas_antes = testes_falhos;
     unsigned char *px = malloc((size_t)w * h * 4);
     for (int vez = 0; vez < 2; ++vez) { /* 2a vez: quadro repetido (dupe) */
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -200,7 +216,7 @@ static void conferir_tela(int fw, int fh, int escala, int modo, const char *rotu
         VERIFICAR(ruins == 0, "%s (vez %d): %d pixels divergentes", rotulo, vez, ruins);
         SDL_RenderPresent(renderer);
     }
-    printf("  tela ok: %s\n", rotulo);
+    if (testes_falhos == falhas_antes) printf("  tela ok: %s\n", rotulo);
     free(px);
 }
 
