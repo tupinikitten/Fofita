@@ -1,6 +1,7 @@
 #include "shader_manager.h"
 #include <SDL2/SDL_opengl.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <limits.h>
 
@@ -31,7 +32,27 @@ static BindFn bind_fbo;
 static AttachTexFn attach_tex;
 static CheckFn check_fbo;
 #define LOAD(type,name,glname) type name=(type)SDL_GL_GetProcAddress(glname); if(!name) goto fail
+static void probe_librashader(void){
+    typedef size_t (*VersionFn)(void);
+    char *base=SDL_GetBasePath();
+    if(!base) return;
+    size_t n=strlen(base)+sizeof("librashader.dll");
+    char *path=malloc(n);
+    if(!path){SDL_free(base);return;}
+    snprintf(path,n,"%slibrashader.dll",base);
+    SDL_free(base);
+    void *lib=SDL_LoadObject(path);
+    free(path);
+    if(!lib){SDL_Log("Librashader: indisponivel; mantendo passthrough");return;}
+    VersionFn abi=(VersionFn)SDL_LoadFunction(lib,"libra_instance_abi_version");
+    VersionFn api=(VersionFn)SDL_LoadFunction(lib,"libra_instance_api_version");
+    if(abi&&api&&abi()==2&&api()>=5)
+        SDL_Log("Librashader: ABI %u API %u (compativel)",(unsigned)abi(),(unsigned)api());
+    else SDL_Log("Librashader: API/ABI incompativel; mantendo passthrough");
+    SDL_UnloadObject(lib);
+}
 static int init(void) {
+    probe_librashader();
     int major=0,minor=0,profile=0;
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,&major);
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,&minor);

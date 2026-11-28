@@ -218,3 +218,7 @@ V2.2b e novo nome aprovados. Avaliada documentação oficial librashader v0.12.1
 27/11/2026: usuária confirmou três inicializações com OpenGL 3.3 compatível e passthrough ativo. CI b443920 concluída com sucesso. Exibição do nome Configurações de vídeo não reconfirmada explicitamente nesta mensagem.
 
 Diretriz aprovada: automatizar regressões progressivamente no GitHub Actions. Priorizar testes unitários de escala/proporção, conversão de pixels, configuração e fallback injetado; depois smoke tests de cores com ROMs livres/licenciadas e comparação de frames com tolerância. Separar testes sem GPU dos que exigem driver/contexto real; não presumir GPU física no runner hospedado. Manter avaliação estética, controles e desempenho em hardware real como testes manuais. Iniciar infraestrutura de testes junto às próximas entregas, sem bloquear integração Slang por uma suíte completa.
+
+### V2.2c.2a — loader opcional
+
+Nome do menu reconfirmado. Loader SDL verifica DLL ao lado do executável, ABI 2/API 5 conforme header oficial v0.12.0. Release x64 disponível em https://github.com/SnowflakePowered/librashader/releases/tag/librashader-v0.12.0 ; SHA256 521fe0f364bfa705883f9e99fb1733a3a24f0f403bcc5591b6b78f6cff289183. Empacotamento adiado até verificar licenças MPL/GPL e componentes do binário. Sem execução Slang ainda. Ausência da DLL mantém passthrough.
