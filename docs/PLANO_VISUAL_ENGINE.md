@@ -212,3 +212,9 @@ Testes manuais aprovados pela usuária em 27/11/2026. Renomear entrada Video par
 ### V2.2c.1 — compatibilidade OpenGL moderna
 
 V2.2b e novo nome aprovados. Avaliada documentação oficial librashader v0.12.1: OpenGL 3.3+ e API C com loader dinâmico; release consultada sem assets. Primeiro testar contexto core 3.3 independente, registrar versão real e manter passthrough 2.1. Próximos: verificar licença e distribuição/build fixado, integrar API C e preset de teste; renderizar na resolução de saída, medir readback e avaliar Switch separadamente. Nenhuma DLL externa incluída nesta etapa.
+
+### Validação V2.2c.1 e automação de testes
+
+27/11/2026: usuária confirmou três inicializações com OpenGL 3.3 compatível e passthrough ativo. CI b443920 concluída com sucesso. Exibição do nome Configurações de vídeo não reconfirmada explicitamente nesta mensagem.
+
+Diretriz aprovada: automatizar regressões progressivamente no GitHub Actions. Priorizar testes unitários de escala/proporção, conversão de pixels, configuração e fallback injetado; depois smoke tests de cores com ROMs livres/licenciadas e comparação de frames com tolerância. Separar testes sem GPU dos que exigem driver/contexto real; não presumir GPU física no runner hospedado. Manter avaliação estética, controles e desempenho em hardware real como testes manuais. Iniciar infraestrutura de testes junto às próximas entregas, sem bloquear integração Slang por uma suíte completa.
