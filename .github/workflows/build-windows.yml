@@ -260,6 +260,7 @@ jobs:
 
           cd build/gpu
           executados=0
+          falhas=""
           for driver in software opengl direct3d11 direct3d; do
             echo "::group::test_gpu ($driver)"
             codigo=0
@@ -271,10 +272,11 @@ jobs:
             elif [ "$codigo" = 77 ] && [ "$driver" != software ] && [ "$driver" != opengl ]; then
               echo "::warning::Renderer $driver indisponivel no runner; nao testado"
             else
-              echo "::error::test_gpu falhou com $driver (codigo $codigo)"; cat fofita_shader.log || true; exit 1
+              echo "::error::test_gpu falhou com $driver (codigo $codigo)"; falhas="$falhas $driver"
             fi
           done
           echo "Renderers testados: $executados"
+          [ -z "$falhas" ] || { echo "::error::Renderers com falha:$falhas"; exit 1; }
           echo "::group::test_core_nes"
           ./test_core_nes.exe tmp || { cat fofita_shader.log || true; exit 1; }
           echo "::endgroup::"

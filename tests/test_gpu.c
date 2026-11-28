@@ -192,7 +192,10 @@ static void esperar_janela(int w, int h) {
     }
     int jw = 0, jh = 0;
     SDL_GetWindowSize(janela, &jw, &jh);
-    fprintf(stderr, "janela %dx%d, saida do renderer %dx%d\n", jw, jh, ow, oh);
+    SDL_version v;
+    SDL_GetVersion(&v);
+    fprintf(stderr, "SDL %d.%d.%d: janela %dx%d, saida do renderer %dx%d\n",
+            v.major, v.minor, v.patch, jw, jh, ow, oh);
 }
 
 /* Desenha como o loop principal e confere o que chegou ao SDL_Renderer. */
