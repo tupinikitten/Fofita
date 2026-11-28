@@ -92,6 +92,15 @@ int main(int argc, char *argv[]) {
                 rodando = false;
                 continue;
             }
+            /* Os shaders usam uma segunda janela, oculta. No SDL2 classico o
+               SDL_QUIT so chega quando a ultima janela fecha: tratar o botao
+               fechar da janela principal explicitamente. */
+            if(event.type==SDL_WINDOWEVENT &&
+               event.window.event==SDL_WINDOWEVENT_CLOSE &&
+               event.window.windowID==SDL_GetWindowID(window)) {
+                rodando = false;
+                continue;
+            }
             if(event.type==SDL_WINDOWEVENT &&
                (event.window.event==SDL_WINDOWEVENT_RESIZED ||
                 event.window.event==SDL_WINDOWEVENT_SIZE_CHANGED)) {
