@@ -66,8 +66,47 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Nucleo de GB/GBC usado SOMENTE nos testes (GPL-2.0): compilado de um commit
+  # fixado e nunca colocado no pacote distribuido.
+  nucleo-gb-teste:
+    runs-on: windows-latest
+    env:
+      GAMBATTE_COMMIT: b14881d382d251c75dcf465ccc9e0f1e1bb39ca9
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Cache do nucleo de teste
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: gb-core
+          key: gambatte-b14881d-v1
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc make git
+      - name: Compilar gambatte-libretro
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git init -q gambatte
+          git -C gambatte fetch -q --depth 1 https://github.com/libretro/gambatte-libretro "$GAMBATTE_COMMIT"
+          git -C gambatte checkout -q FETCH_HEAD
+          test "$(git -C gambatte rev-parse HEAD)" = "$GAMBATTE_COMMIT"
+          make -C gambatte -f Makefile.libretro platform=win CC=gcc CXX=g++ -j4
+          mkdir -p gb-core
+          cp gambatte/gambatte_libretro.dll gb-core/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nucleo-gb-somente-teste
+          path: gb-core/gambatte_libretro.dll
+          if-no-files-found: error
+          retention-days: 1
+
   windows:
-    needs: [testes-linux, avisos-licenca, librashader]
+    needs: [testes-linux, avisos-licenca, librashader, nucleo-gb-teste]
     runs-on: windows-latest
     defaults:
       run:
@@ -100,6 +139,12 @@ jobs:
         with:
           name: librashader-dll
           path: lr-dist
+
+      - name: Obter nucleo de GB/GBC para os testes
+        uses: actions/download-artifact@v4
+        with:
+          name: nucleo-gb-somente-teste
+          path: gb-core
 
       - name: Testes sem GPU (Windows)
         run: bash tests/run_unit.sh
@@ -205,6 +250,8 @@ jobs:
             }
           done
           test -s dist/Fofita/Fofita.exe
+          test ! -e dist/Fofita/cores/gambatte_libretro.dll || \
+            echo "::notice::gambatte presente em cores/ (versionado no repositorio)"
           # O build nao e considerado pronto se sdl2-compat estiver sem seu backend.
           if grep -aFq 'SDL3.dll' dist/Fofita/SDL2.dll || \
              grep -aFq 'Failed loading SDL3 library' dist/Fofita/SDL2.dll; then
@@ -242,9 +289,15 @@ jobs:
           SDL="$(pkg-config --cflags sdl2 SDL2_image) $(pkg-config --libs sdl2 SDL2_image | sed 's/-mwindows//; s/-lSDL2main//; s/-Dmain=SDL_main//')"
           gcc $FLAGS tests/test_gpu.c game_video.c video_math.c shader_manager.c slang_backend.c \
             -o build/gpu/test_gpu.exe $SDL -lopengl32 -lm
-          gcc -std=gnu11 -O1 -g -Wall tests/test_core_nes.c game_video.c video_math.c shader_manager.c \
+          gcc -std=gnu11 -O1 -g -Wall tests/test_core.c game_video.c video_math.c shader_manager.c \
             slang_backend.c video_audio.c libretro_core.c input.c \
-            -o build/gpu/test_core_nes.exe $SDL -lopengl32 -lm
+            -o build/gpu/test_core.exe $SDL -lopengl32 -lm
+          APP=()
+          for fonte in *.c; do [ "$fonte" = mini_frontend.c ] || APP+=("$fonte"); done
+          gcc -std=gnu11 -O1 -g -Wall tests/test_menu.c "${APP[@]}" \
+            -o build/gpu/test_menu.exe $SDL -lopengl32 -lm
+          # Copiado so para a pasta de testes, nunca para dist/.
+          cp gb-core/gambatte_libretro.dll build/gpu/cores/
           queue=(/mingw64/bin/opengl32.dll)
           cp /mingw64/bin/opengl32.dll build/gpu/
           index=0
@@ -277,8 +330,13 @@ jobs:
           done
           echo "Renderers testados: $executados"
           [ -z "$falhas" ] || { echo "::error::Renderers com falha:$falhas"; exit 1; }
-          echo "::group::test_core_nes"
-          ./test_core_nes.exe tmp || { cat fofita_shader.log || true; exit 1; }
+          for par in nes:fceumm gb:gambatte gbc:gambatte; do
+            echo "::group::test_core (${par%:*})"
+            ./test_core.exe "${par%:*}" "cores/${par#*:}_libretro.dll" tmp || { cat fofita_shader.log || true; exit 1; }
+            echo "::endgroup::"
+          done
+          echo "::group::test_menu"
+          ./test_menu.exe
           echo "::endgroup::"
 
       - name: Publicar pacote para download (ZIP unico)

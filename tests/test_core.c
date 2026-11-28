@@ -1,7 +1,7 @@
-/* Ponta a ponta no Windows: nucleo NES real (cores/fceumm_libretro.dll),
-   ROM minima gerada aqui (sem conteudo de terceiros), video do Fofita e
-   leitura do que chegou a janela. Executar na pasta do pacote.
-   Uso: test_core_nes <dir_tmp> */
+/* Ponta a ponta no Windows: nucleo libretro real (fceumm ou gambatte), ROM
+   minima gerada aqui (sem conteudo de terceiros), video do Fofita e leitura
+   do que chegou a janela. Executar na pasta do pacote.
+   Uso: test_core <nes|gb|gbc> <nucleo> <dir_tmp> */
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include <stdbool.h>
@@ -15,7 +15,7 @@
 bool em_menu = false; /* definido em mini_frontend.c no app */
 
 /* Pinta o fundo com a cor 0x16 da paleta e entra em laco. */
-static int gerar_rom(const char *caminho) {
+static int gerar_rom_nes(const char *caminho) {
     static const unsigned char codigo[] = {
         0x78, 0xD8, 0xA2, 0xFF, 0x9A,             /* SEI CLD LDX #FF TXS */
         0xE8, 0x8E, 0x00, 0x20, 0x8E, 0x01, 0x20, /* INX; desliga PPU */
@@ -49,11 +49,52 @@ static int gerar_rom(const char *caminho) {
     return ok;
 }
 
+/* Game Boy: limpa a VRAM e pinta o fundo inteiro com a cor 0 da paleta.
+   GB usa BGP (cinza claro); GBC define a cor 0 da paleta 0 (azulada).
+   O logo da Nintendo nao e incluido: o gambatte nao executa a boot ROM. */
+static int gerar_rom_gb(const char *caminho, int colorido) {
+    static const unsigned char inicio[] = {
+        0xF3, 0x31, 0xFE, 0xFF,                   /* DI; LD SP,$FFFE */
+        0xF0, 0x44, 0xFE, 0x90, 0x38, 0xFA,       /* espera LY >= 144 */
+        0xAF, 0xE0, 0x40,                         /* desliga o LCD */
+        0x21, 0x00, 0x80,                         /* HL = $8000 */
+        0xAF, 0x22, 0x7C, 0xFE, 0xA0, 0x20, 0xF9  /* zera ate $9FFF */
+    };
+    static const unsigned char paleta_gb[] = {0x3E, 0x01, 0xE0, 0x47};
+    static const unsigned char paleta_gbc[] = {
+        0x3E, 0x80, 0xE0, 0x68,                   /* indice 0, auto-incremento */
+        0x3E, 0x86, 0xE0, 0x69, 0x3E, 0x71, 0xE0, 0x69
+    };
+    static const unsigned char fim[] = {
+        0x3E, 0x91, 0xE0, 0x40,                   /* liga LCD e fundo */
+        0x18, 0xFE                                /* laco */
+    };
+    static unsigned char rom[32768];
+    memset(rom, 0, sizeof(rom));
+    rom[0x101] = 0xC3; rom[0x102] = 0x50; rom[0x103] = 0x01; /* JP $0150 */
+    memcpy(rom + 0x134, "FOFITA", 6);
+    rom[0x143] = colorido ? 0x80 : 0x00;
+    size_t p = 0x150;
+    memcpy(rom + p, inicio, sizeof(inicio)); p += sizeof(inicio);
+    if (colorido) { memcpy(rom + p, paleta_gbc, sizeof(paleta_gbc)); p += sizeof(paleta_gbc); }
+    else { memcpy(rom + p, paleta_gb, sizeof(paleta_gb)); p += sizeof(paleta_gb); }
+    memcpy(rom + p, fim, sizeof(fim));
+    unsigned char soma = 0;
+    for (int i = 0x134; i <= 0x14C; ++i) soma = (unsigned char)(soma - rom[i] - 1);
+    rom[0x14D] = soma;
+    FILE *f = fopen(caminho, "wb");
+    if (!f) return 0;
+    int ok = fwrite(rom, 1, sizeof(rom), f) == sizeof(rom);
+    fclose(f);
+    return ok;
+}
+
 /* Roda o jogo e devolve a imagem apresentada na janela (RGBA). */
-static unsigned char *capturar(const char *rom, int modo, int *w, int *h) {
+static unsigned char *capturar(const char *nucleo, const char *console,
+                               const char *rom, int modo, int *w, int *h) {
     video_shader = modo;
     shader_limpar_falha();
-    if (!init_core("cores/fceumm_libretro.dll") || !load_game(rom)) {
+    if (!init_core(nucleo) || !load_game(rom)) {
         VERIFICAR(0, "carregar nucleo/ROM");
         return NULL;
     }
@@ -73,7 +114,7 @@ static unsigned char *capturar(const char *rom, int modo, int *w, int *h) {
         run_core();
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-        game_video_desenhar("nes");
+        game_video_desenhar(console);
         if (i == 59) {
             int ow = 0, oh = 0;
             SDL_GetRendererOutputSize(renderer, &ow, &oh);
@@ -106,11 +147,14 @@ static int divergentes(const unsigned char *px, int w, int h, const unsigned cha
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) return 2;
+    if (argc < 4) { fprintf(stderr, "uso: %s nes|gb|gbc nucleo dir_tmp\n", argv[0]); return 2; }
+    const char *console = argv[1], *nucleo = argv[2];
+    int nes = !strcmp(console, "nes"), gbc = !strcmp(console, "gbc");
+    if (!nes && !gbc && strcmp(console, "gb")) return 2;
     SDL_SetMainReady();
     char rom[1024];
-    snprintf(rom, sizeof(rom), "%s/fundo.nes", argv[1]);
-    if (!gerar_rom(rom)) return 2;
+    snprintf(rom, sizeof(rom), "%s/fundo.%s", argv[3], console);
+    if (!(nes ? gerar_rom_nes(rom) : gerar_rom_gb(rom, gbc))) return 2;
     if (!init_video_audio()) { fprintf(stderr, "%s\n", SDL_GetError()); return 2; }
     SDL_RendererInfo info;
     SDL_GetRendererInfo(renderer, &info);
@@ -119,18 +163,26 @@ int main(int argc, char **argv) {
     video_escala = 2;
 
     int w = 0, h = 0;
-    unsigned char *base = capturar(rom, SHADER_NENHUM, &w, &h);
+    unsigned char *base = capturar(nucleo, console, rom, SHADER_NENHUM, &w, &h);
     unsigned char cor[3] = {0};
     if (base) {
         memcpy(cor, base + ((h / 2) * w + w / 2) * 4, 3);
-        printf("nucleo NES %dx%d, cor de fundo %d,%d,%d\n", w / 3, h / 3,
+        printf("nucleo %s %dx%d, cor de fundo %d,%d,%d\n", console, w / 3, h / 3,
                cor[0], cor[1], cor[2]);
-        VERIFICAR(cor[0] > 60 && cor[0] > cor[1] && cor[0] > cor[2], "fundo avermelhado");
+        /* A cor esperada confirma que a ROM de teste realmente executou. */
+        if (nes)
+            VERIFICAR(cor[0] > 60 && cor[0] > cor[1] && cor[0] > cor[2], "fundo avermelhado");
+        else if (gbc)
+            VERIFICAR(cor[2] > 120 && cor[2] > cor[1] && cor[1] > cor[0], "fundo azulado");
+        else
+            VERIFICAR(cor[0] > 100 && cor[0] < 230 && abs(cor[0] - cor[1]) < 12 &&
+                      abs(cor[1] - cor[2]) < 12, "fundo cinza claro");
         VERIFICAR(divergentes(base, w, h, cor, 0) == 0, "sem shader: imagem uniforme");
     }
+    /* Duas sessoes: tambem cobre fechar e reabrir o jogo com o shader. */
     for (int rodada = 0; rodada < 2; ++rodada) {
         int sw = 0, sh = 0;
-        unsigned char *s = capturar(rom, SHADER_SLANG_TESTE, &sw, &sh);
+        unsigned char *s = capturar(nucleo, console, rom, SHADER_SLANG_TESTE, &sw, &sh);
         if (s && base && sw == w && sh == h) {
             int ruins = divergentes(s, w, h, cor, 1);
             VERIFICAR(ruins == 0, "slang (sessao %d): %d pixels divergentes", rodada, ruins);
@@ -138,12 +190,15 @@ int main(int argc, char **argv) {
         free(s);
     }
     int pw = 0, ph = 0;
-    unsigned char *p = capturar(rom, SHADER_PASSTHROUGH, &pw, &ph);
+    unsigned char *p = capturar(nucleo, console, rom, SHADER_PASSTHROUGH, &pw, &ph);
     if (p && pw == w && ph == h)
         VERIFICAR(divergentes(p, w, h, cor, 0) == 0, "passthrough alterou a imagem");
+    else VERIFICAR(0, "sem captura passthrough");
     free(p);
     free(base);
     remove(rom);
     fechar_video_audio();
-    return testes_resumo("test_core_nes");
+    char nome[32];
+    snprintf(nome, sizeof(nome), "test_core %s", console);
+    return testes_resumo(nome);
 }
