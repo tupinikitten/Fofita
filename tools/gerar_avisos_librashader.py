@@ -21,6 +21,22 @@ VERSAO = "0.12.0"
 COMMIT = "87e8a97b50516d997defeaa168173dcd185d4022"
 ALVO = "x86_64-pc-windows-msvc"
 NOMES = re.compile(r"^(licen[cs]e|copying|copyright|notice|unlicense)([-_.].*)?$", re.I)
+MIT_PADRAO = """Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."""
 CODIGO = {".rs", ".c", ".cpp", ".h", ".hpp", ".py", ".json"}
 
 
@@ -97,9 +113,15 @@ def main():
             f.write("\n== Pacotes publicados sem arquivo de licenca (vale a expressao SPDX;\n")
             f.write("textos-padrao em https://spdx.org/licenses/) ==\n")
             f.write("\n".join(sem_arquivo) + "\n")
+            f.write("\nTexto padrao da licenca MIT, aplicavel aos itens MIT acima, com os\n")
+            f.write("direitos autorais pertencentes aos respectivos autores:\n\n" + MIT_PADRAO + "\n")
         for conteudo, usos in textos.values():
             f.write("\n" + "=" * 78 + "\n" + "\n".join(usos) + "\n" + "-" * 78 + "\n")
             f.write(conteudo + "\n")
+
+    # Pacotes sem arquivo proprio que permitem Apache-2.0 dependem do texto completo.
+    if not any("TERMS AND CONDITIONS FOR USE, REPRODUCTION" in c for c, _ in textos.values()):
+        sys.exit("texto completo da Apache-2.0 ausente dos avisos")
 
     shutil.copyfile(fonte / "LICENSE.md", saida / "librashader-MPL-2.0.md")
     (saida / "LEIA-ME-librashader.txt").write_text(
@@ -120,6 +142,14 @@ O header librashader.h usado na compilacao e licenciado sob MIT.
           f"{len(sem_arquivo)} sem arquivo proprio")
     expressoes = sorted({pacotes[i].get("license") or "(arquivo)" for i in visitados})
     print("Expressoes de licenca encontradas:\n  " + "\n  ".join(expressoes))
+    # Resumo no log: componentes C/C++ embutidos e crates sob MPL.
+    for _, usos in textos.values():
+        for uso in usos:
+            if uso.startswith(("glslang-sys ", "spirv-cross-sys ", "spirv-to-dxil-sys ")):
+                print("embutido:", uso)
+    for linha in resumo:
+        if "MPL" in linha:
+            print("MPL:", linha)
     if sem_arquivo:
         print("Sem arquivo de licenca:\n" + "\n".join(sem_arquivo))
 

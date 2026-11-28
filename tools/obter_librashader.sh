@@ -17,12 +17,16 @@ unzip -q "$TMP/$ZIP" librashader.dll librashader.h -d "$TMP/x"
 
 # O header versionado no repositorio deve ser a mesma API do binario.
 macros() { tr -d '\r' < "$1" | grep -E '^#define LIBRASHADER_CURRENT_(VERSION|ABI) '; }
-if ! diff <(macros "$TMP/x/librashader.h") <(macros "$RAIZ/third_party/librashader/librashader.h"); then
+# Sem diff/cmp: o MSYS2 do CI nao inclui diffutils.
+esperado=$(macros "$RAIZ/third_party/librashader/librashader.h")
+obtido=$(macros "$TMP/x/librashader.h")
+if [ -z "$obtido" ] || [ "$obtido" != "$esperado" ]; then
   echo "::error::ABI/API do header versionado difere do binario baixado"
+  printf 'versionado:\n%s\nbinario:\n%s\n' "$esperado" "$obtido"
   exit 1
 fi
-if diff -q <(tr -d '\r' < "$TMP/x/librashader.h") \
-           <(tr -d '\r' < "$RAIZ/third_party/librashader/librashader.h") >/dev/null; then
+resumo() { tr -d '\r' < "$1" | sha256sum; }
+if [ "$(resumo "$TMP/x/librashader.h")" = "$(resumo "$RAIZ/third_party/librashader/librashader.h")" ]; then
   echo "Header do zip identico ao versionado"
 else
   echo "Aviso: header do zip difere em texto do versionado (ABI/API iguais)"
